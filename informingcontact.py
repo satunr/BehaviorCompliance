@@ -11,7 +11,7 @@ from copy import deepcopy
 
 # 2 ways that graphs can be saved in this code: Pinging Cytoscape via py4cytoscape, or saving a graph to gml file.
 # Change this to True if you want Cytoscape to be pinged from py4cytoscape
-ping_cytoscape = False
+ping_cytoscape = True
 
 # Change to True if you want to save to a gml file
 save_gmls = False
@@ -33,8 +33,8 @@ T = 30
 Repeat = 1
 
 # Epidemic parameters
-beta = 0.4  # Infection rate
-gamma = 0.05  # Recovery rate
+beta = 0.3  # Infection rate
+gamma = 0.03  # Recovery rate
 mu = 0.5  # Immunity loss rate
 init = 0.05
 verbose = False # Set to false if you don't want to plot anything from SIR.py
