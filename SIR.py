@@ -5,18 +5,21 @@ import math
 import matplotlib.pyplot as plt
 import find_seeds
 import correlated_graphs
+import parse
 
 from copy import deepcopy
 
 # Set to True if you want to see difference in infection spread w/ 
 #   quarantining and non-quarantining for your given param.s.
-compare_quarantining_non_quarantining = False
+compare_quarantining_non_quarantining = True
 
 # I modified this code to allow infected individuals to no longer be infected after a certain period
 def sirs_step(G, state, L, beta, gamma, mu):
 
     # Copy the current state to avoid modifying the dictionary while iterating
     new_state = state.copy()
+
+    print("state: ", state)
 
     # Spread infection: Infected individuals attempt to infect susceptible neighbors
     for u in G.nodes:
@@ -238,16 +241,33 @@ if compare_quarantining_non_quarantining == True:
     T = 200
     Repeat = 1
 
-    beta = 0.27  #infection rate
-    gamma = 0.04  # recovery rate
-    mu = 0.05   # immunity loss
+    beta = 0.10  #infection rate
+    gamma = 0.05  # recovery rate
+    mu = 0.10   # immunity loss
     init = 0.05
 
-    contact_network = nx.erdos_renyi_graph(n, p=0.025, directed=False)
-    contact_network = nx.relabel_nodes(contact_network, {u: int(u) for u in contact_network.nodes()})
-    social_network = correlated_graphs.create_w_k_hop_correlation(contact_network,k=1)[0]   # We just want the graph part of this output
+    #---------
+    #
+    #  Generate social network w/ 1-hop correlation
+    #
+    #---------
 
-    print("Social network size: ", len(social_network.nodes()), "Contact network size: ", len(contact_network.nodes()))
+    # contact_network = nx.erdos_renyi_graph(n, p=0.025, directed=False)
+    # contact_network = nx.relabel_nodes(contact_network, {u: int(u) for u in contact_network.nodes()})
+
+    # Specify the filename
+    filename = 'contact_network_text.txt'
+    # Create the graph from the file
+    contact_graph = parse.parse(filename)
+
+    # Relabel nodes in parsed graph to avoid off by 1 errors in SIR.py
+    # Create a mapping from old node to new node: i -> i - 1
+    mapping = {node: node - 1 for node in contact_graph.nodes()}
+
+    # Relabel the nodes
+    contact_network = nx.relabel_nodes(contact_graph, mapping)
+
+    social_network = correlated_graphs.create_w_k_hop_correlation(contact_network,k=1)[0]   # We just want the graph part of this output
 
     # NOTE: This data is derived from 2 separate runs of Simulate_SIR, and is therefore only an approx. comparison
     data1 = Simulate_SIR(contact_network=contact_network,social_network=social_network,T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,verbose=False,q=True,allow_restoration=True)[2]
@@ -267,7 +287,40 @@ if compare_quarantining_non_quarantining == True:
     # Customize the plot
     plt.xlabel('Time')
     plt.ylabel('# of Infected')
-    plt.title('Comparison')
+    plt.title('Quarantine Comparison Social 1-hop')
+    plt.legend()  # Add legend to distinguish the lines
+    plt.grid(True)
+
+    # Show the plot
+    plt.show()
+
+    #----------
+    #
+    #  Generate social network with 2-hop correlation
+    #
+    #----------
+
+    social_network = correlated_graphs.create_w_k_hop_correlation(contact_network,k=2)[0]   # We just want the graph part of this output
+
+    # NOTE: This data is derived from 2 separate runs of Simulate_SIR, and is therefore only an approx. comparison
+    data1 = Simulate_SIR(contact_network=contact_network,social_network=social_network,T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,verbose=False,q=True,allow_restoration=True)[2]
+    data2 = Simulate_SIR(contact_network=contact_network,social_network=social_network,T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,verbose=False,q=True,allow_restoration=False)[2]
+    data3 = Simulate_SIR(contact_network=contact_network,social_network=social_network,T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,verbose=False,q=False,allow_restoration=False)[2]
+
+    # Extract x and y data from arrays
+    x1, y1 = data1[0], data1[1]
+    x2, y2 = data2[0], data2[1]
+    x3, y3 = data3[0], data3[1]
+
+    # Create the plot
+    plt.plot(x1, y1, label='With Restoration', color='blue', marker='o')
+    plt.plot(x2, y2, label='Without Restoration', color='red', marker='o')
+    plt.plot(x3, y3, label='No quarantine', color='green', marker='o')
+
+    # Customize the plot
+    plt.xlabel('Time')
+    plt.ylabel('# of Infected')
+    plt.title('Quarantine Comparison Social 2-hop')
     plt.legend()  # Add legend to distinguish the lines
     plt.grid(True)
 

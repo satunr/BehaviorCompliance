@@ -38,12 +38,21 @@ gamma = 0.03  # Recovery rate
 mu = 0.5  # Immunity loss rate
 init = 0.05
 verbose = False # Set to false if you don't want to plot anything from SIR.py
-q = -1 # Quarantine period. Set to -1 if you don't want to consider quarantines in your simulation
+q = False
+
+
 
 # Specify the filename
 filename = 'contact_network_text.txt'
 # Create the graph from the file
 contact_graph = parse.parse(filename)
+
+# Relabel nodes in parsed graph to avoid off by 1 errors in SIR.py
+# Create a mapping from old node to new node: i -> i - 1
+mapping = {node: node - 1 for node in contact_graph.nodes()}
+
+# Relabel the nodes
+contact_graph = nx.relabel_nodes(contact_graph, mapping)
 
 # Save to a GML file
 if save_gmls == True:
@@ -55,7 +64,23 @@ if ping_cytoscape == True:
     # Send the NetworkX graph to Cytoscape
     p4c.create_network_from_networkx(contact_graph, collection="My NetworkX Graph", title="Initial Contact")
 
+
+#---------
+#
+#  Generate the social network
+#
+#---------
+
 social_graph = correlated_graphs.create_w_k_hop_correlation(contact_graph, k=1)[0]   # Create a 1-hop graph from contact network
+
+if save_gmls == True:
+    nx.write_gml(social_graph, "initial_social_network.gml")
+
+if ping_cytoscape == True:
+    # # Check Cytoscape connection
+    p4c.cytoscape_ping()
+    # Send the NetworkX graph to Cytoscape
+    p4c.create_network_from_networkx(social_graph, collection="My NetworkX Graph", title="Initial Social")
 
 # The tuple (G, state) is stored in state_tuple variable
 state_tuple = SIR.Simulate_SIR(social_network=social_graph,contact_network=contact_graph,T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,verbose=verbose,q=q)
@@ -75,26 +100,6 @@ for triple in infection_statuses:
         label = "Recovered"
 
     nx.set_node_attributes(contact_graph, {triple: label}, "label")
-
-
-#---------
-#
-#  Generate the social network
-#
-#---------
-
-# Parameters
-# n = whatever it was earlier.  # Number of nodes. We won't change this value because we want it to be the same number
-# as in the contact network
-
-if save_gmls == True:
-    nx.write_gml(social_graph, "initial_social_network.gml")
-
-if ping_cytoscape == True:
-    # # Check Cytoscape connection
-    p4c.cytoscape_ping()
-    # Send the NetworkX graph to Cytoscape
-    p4c.create_network_from_networkx(social_graph, collection="My NetworkX Graph", title="Initial Social")
 
 #---------
 #
