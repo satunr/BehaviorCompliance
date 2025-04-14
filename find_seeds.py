@@ -1,7 +1,7 @@
 import networkx as nx
 import numpy as np
 import IM
-import correlated_graphs
+import matplotlib.pyplot as plt
 
 # Probabilistic way of finding seed nodes, given an initial set
 #   Governed by: P_i(seed) = (d_i)^k / sum_j ((d_j)^k)
@@ -25,15 +25,38 @@ def find_seed_set(g, num_seeds, exponent=1):
 
     return seed_set
 
-# Creates a social network, creates initial seeds, finds final seeds
-# G: base graph
-def initialize_social_IM(G, k, p, num_seeds):
-    # NOTE: Creates a graph for now. May want to pass in a graph instead
-    # S = nx.erdos_renyi_graph(network_size, p, directed=True)
-    S = correlated_graphs.create_correlated_digraph(G, 0.3, 0.02, len(G.nodes()))
-    seeds = find_seed_set(S, num_seeds, exponent=1)
-    result = IM.greedy(S, k, seeds, p)
+def initialize_social_IM(social_network,k,p,num_seeds):
+    seeds = find_seed_set(social_network, num_seeds, exponent=1)
+    result = IM.greedy(social_network, k, seeds, p)
     max_influence = result[0]
     # spread = result[1]
 
     return max_influence
+
+# Create a sample social network (using a Barabasi-Albert graph as an example)
+# social_network = nx.DiGraph()
+# social_network.add_nodes_from([1,2,3,4,5])
+# social_network.add_edges_from([(1,2), (3,4), (5,1)])
+
+# # Parameters for the Independent Cascade Model
+# k = 3       # Number of attempts to activate a node
+# p = 0.1      # Probability of activation
+
+# # Number of seed nodes to select
+# num_seeds = 5
+
+# # Run the social network influence maximization
+# max_influence = initialize_social_IM(social_network, k, p, num_seeds)
+
+# print(f"Selected {num_seeds} seed nodes")
+# print(f"Maximum influence spread: {max_influence}")
+
+# # Visualize the network with seed nodes highlighted
+# pos = nx.spring_layout(social_network)
+# node_colors = ['red' if social_network.nodes[node].get('Seed?') == 'Seed' else 'skyblue' 
+#             for node in social_network.nodes()]
+
+# plt.figure(figsize=(10, 8))
+# nx.draw(social_network, pos, node_color=node_colors, with_labels=True, node_size=300)
+# plt.title("Social Network with Seed Nodes Highlighted")
+# plt.show()

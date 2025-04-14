@@ -47,7 +47,7 @@ def create_correlated_digraph(base_graph, correlation_factor, base_probability=0
 # Modified function to accept a k parameter for hop distance
 def create_w_k_hop_correlation(base_graph, k):
     # Initialize an empty unweighted graph
-    correlated_graph = nx.Graph()
+    correlated_graph = nx.DiGraph()
     
     # Add all nodes from the base graph to the correlated graph
     correlated_graph.add_nodes_from(base_graph.nodes())

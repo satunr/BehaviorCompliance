@@ -3,8 +3,8 @@ import numpy as np
 import random
 import math
 import matplotlib.pyplot as plt
-
 import find_seeds
+import correlated_graphs
 
 from copy import deepcopy
 
@@ -113,21 +113,18 @@ def restore_edges(g_init, g, node):
 
 # Wrapper I wrote around the example code that was here to begin with
 # q: Set to true if you want quarantine periods to be factored into algorithm
-def Simulate_SIR(n, T, Repeat, beta, gamma, mu, init, verbose, q=True, allow_restoration=False):
+def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,verbose,q=True,allow_restoration=False):
+    n = len(contact_network.nodes())
     All_Init = {t: [] for t in range(T + 1)}
     for _ in range(Repeat):
         N = n - 1
         P = n - N
 
-        # Human contact network
-        G = nx.erdos_renyi_graph(n, p=0.025, directed=False)
-        G = nx.relabel_nodes(G, {u: int(u) for u in G.nodes()})
-
         # k: # of seeds we want
-        max_influence = find_seeds.initialize_social_IM(G,k=5,p=0.025,num_seeds=15)  # Create a social network, run IM on it
+        max_influence = find_seeds.initialize_social_IM(social_network=social_network,k=5,p=0.025,num_seeds=15)  # Create a social network, run IM on it
 
         # We are saving the initial state of G so we know what connections to restore later
-        G_initial = deepcopy(G)
+        G_initial = deepcopy(contact_network)
 
         # Initial state dictionary (0: susceptible, 1: infected, 2: immune)
         state = {u: np.random.choice(a=[1, 0], size=1, p=[init, 1 - init])[0]
@@ -153,7 +150,7 @@ def Simulate_SIR(n, T, Repeat, beta, gamma, mu, init, verbose, q=True, allow_res
 
         for node in max_influence:
             if state[node] == 1:
-                nx.set_node_attributes(G, {node: {'Informed?': 'Informed'}})
+                nx.set_node_attributes(contact_network, {node: {'Informed?': 'Informed'}})
 
         for t in range(T):
             copy_state = deepcopy(state)
@@ -163,7 +160,7 @@ def Simulate_SIR(n, T, Repeat, beta, gamma, mu, init, verbose, q=True, allow_res
             L = transition(L, P_prime)
 
             # Update state using SIRS model
-            state = sirs_step(G, state, L, beta, gamma, mu)
+            state = sirs_step(contact_network, state, L, beta, gamma, mu)
 
             # Analyze state changes across all nodes
             for u in range(n):
@@ -180,7 +177,7 @@ def Simulate_SIR(n, T, Repeat, beta, gamma, mu, init, verbose, q=True, allow_res
 
                     # Individual chooses, at the first step in their infection, whether they want to quarantine
                     if quarantine_statuses[u] == 1:
-                        quarantine_edge_removal(g=G, node=u, states=state)
+                        quarantine_edge_removal(g=contact_network, node=u, states=state)
 
                     # Add +1 to their quarantine period
                     quarantine_statuses[u] = quarantine_statuses[u] + 1
@@ -188,7 +185,7 @@ def Simulate_SIR(n, T, Repeat, beta, gamma, mu, init, verbose, q=True, allow_res
                     # If the quarantine time has been reached for the individual, remove from the infected category
                     if quarantine_statuses[u] >= d[u]:
                         if allow_restoration:
-                            restore_edges(G_initial, G, u)
+                            restore_edges(G_initial, contact_network, u)
                         state[u] = 2
 
             # Update infection count for plotting
@@ -197,8 +194,8 @@ def Simulate_SIR(n, T, Repeat, beta, gamma, mu, init, verbose, q=True, allow_res
 
             # Assign attributes to each node
             for i, _, _ in state_changes:
-                G.nodes[i]['Infection Status'] = state_changes[i][1]
-                G.nodes[i]['Timestamp'] = state_changes[i][2]
+                contact_network.nodes[i]['Infection Status'] = state_changes[i][1]
+                contact_network.nodes[i]['Timestamp'] = state_changes[i][2]
 
         return_data = []
         # Store initial infection data
@@ -227,17 +224,7 @@ def Simulate_SIR(n, T, Repeat, beta, gamma, mu, init, verbose, q=True, allow_res
 
     # Return the graph and the list of state change tuples
     # G's attributes are changed here
-    return G, state_changes, return_data
-
-
-n = 100
-T = 200
-Repeat = 1
-
-beta = 0.07  #infection rate
-gamma = 0.04  # recovery rate
-mu = 0.05   # immunity loss
-init = 0.05
+    return contact_network, state_changes, return_data
 
 
 #----------
@@ -247,10 +234,25 @@ init = 0.05
 #----------
 
 if compare_quarantining_non_quarantining == True:
+    n = 100
+    T = 200
+    Repeat = 1
+
+    beta = 0.27  #infection rate
+    gamma = 0.04  # recovery rate
+    mu = 0.05   # immunity loss
+    init = 0.05
+
+    contact_network = nx.erdos_renyi_graph(n, p=0.025, directed=False)
+    contact_network = nx.relabel_nodes(contact_network, {u: int(u) for u in contact_network.nodes()})
+    social_network = correlated_graphs.create_w_k_hop_correlation(contact_network,k=1)[0]   # We just want the graph part of this output
+
+    print("Social network size: ", len(social_network.nodes()), "Contact network size: ", len(contact_network.nodes()))
+
     # NOTE: This data is derived from 2 separate runs of Simulate_SIR, and is therefore only an approx. comparison
-    data1 = Simulate_SIR(n,T,Repeat,beta,gamma,mu,init,verbose=False,q=True,allow_restoration=True)[2]
-    data2 = Simulate_SIR(n,T,Repeat,beta,gamma,mu,init,verbose=False,q=True,allow_restoration=False)[2]
-    data3 = Simulate_SIR(n,T,Repeat,beta,gamma,mu,init,verbose=False,q=False,allow_restoration=False)[2]
+    data1 = Simulate_SIR(contact_network=contact_network,social_network=social_network,T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,verbose=False,q=True,allow_restoration=True)[2]
+    data2 = Simulate_SIR(contact_network=contact_network,social_network=social_network,T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,verbose=False,q=True,allow_restoration=False)[2]
+    data3 = Simulate_SIR(contact_network=contact_network,social_network=social_network,T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,verbose=False,q=False,allow_restoration=False)[2]
 
     # Extract x and y data from arrays
     x1, y1 = data1[0], data1[1]

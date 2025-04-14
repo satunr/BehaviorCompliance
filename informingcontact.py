@@ -7,6 +7,7 @@ import py4cytoscape as p4c
 import random as random
 import numpy as np
 import find_seeds
+import parse
 from copy import deepcopy
 
 # 2 ways that graphs can be saved in this code: Pinging Cytoscape via py4cytoscape, or saving a graph to gml file.
@@ -28,8 +29,7 @@ edge_removal_comparison = False
 #
 #-------
 
-n = 100
-T = 30
+T = 100
 Repeat = 1
 
 # Epidemic parameters
@@ -40,8 +40,25 @@ init = 0.05
 verbose = False # Set to false if you don't want to plot anything from SIR.py
 q = -1 # Quarantine period. Set to -1 if you don't want to consider quarantines in your simulation
 
+# Specify the filename
+filename = 'contact_network_text.txt'
+# Create the graph from the file
+contact_graph = parse.parse(filename)
+
+# Save to a GML file
+if save_gmls == True:
+    nx.write_gml(contact_graph, "initial_contact_network.gml")
+
+if ping_cytoscape == True:
+    # Check Cytoscape connection
+    p4c.cytoscape_ping()
+    # Send the NetworkX graph to Cytoscape
+    p4c.create_network_from_networkx(contact_graph, collection="My NetworkX Graph", title="Initial Contact")
+
+social_graph = correlated_graphs.create_w_k_hop_correlation(contact_graph, k=1)[0]   # Create a 1-hop graph from contact network
+
 # The tuple (G, state) is stored in state_tuple variable
-state_tuple = SIR.Simulate_SIR(n=n, T=T, Repeat=Repeat, beta=beta, gamma=gamma, mu=mu, init=init, verbose=verbose, q=q)
+state_tuple = SIR.Simulate_SIR(social_network=social_graph,contact_network=contact_graph,T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,verbose=verbose,q=q)
 contact_graph = state_tuple[0]
 infection_statuses = state_tuple[1] # Giving these variables their own names for simplicity
 
@@ -59,16 +76,6 @@ for triple in infection_statuses:
 
     nx.set_node_attributes(contact_graph, {triple: label}, "label")
 
-# Save to a GML file
-if save_gmls == True:
-    nx.write_gml(contact_graph, "initial_contact_network.gml")
-
-if ping_cytoscape == True:
-    # Check Cytoscape connection
-    p4c.cytoscape_ping()
-    # Send the NetworkX graph to Cytoscape
-    p4c.create_network_from_networkx(contact_graph, collection="My NetworkX Graph", title="Initial Contact")
-
 
 #---------
 #
@@ -79,9 +86,6 @@ if ping_cytoscape == True:
 # Parameters
 # n = whatever it was earlier.  # Number of nodes. We won't change this value because we want it to be the same number
 # as in the contact network
-
-# A function I created to have nice correlation in my simulation
-social_graph = correlated_graphs.create_correlated_digraph(base_graph=contact_graph, correlation_factor=0.3, base_probability=0.01)
 
 if save_gmls == True:
     nx.write_gml(social_graph, "initial_social_network.gml")
