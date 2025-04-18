@@ -12,7 +12,7 @@ from copy import deepcopy
 
 # 2 ways that graphs can be saved in this code: Pinging Cytoscape via py4cytoscape, or saving a graph to gml file.
 # Change this to True if you want Cytoscape to be pinged from py4cytoscape
-ping_cytoscape = False
+ping_cytoscape = True
 
 # Change to True if you want to save to a gml file
 save_gmls = False
