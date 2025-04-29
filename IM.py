@@ -35,26 +35,7 @@ def greedy(g, k, seeds, p=0.1, mc=1000):
 
     return S, spread
 
-def LT(g, initial_active: set = None):
-    # Initialize thresholds for each node
-    thresholds = np.random.uniform(0, 1, len(g))
-
-    # Assign fixed influence weights to edges
-    edge_weights = {}
-    for node in g.nodes():
-        predecessors = list(g.predecessors(node))
-        if predecessors:
-            # Generate random weights and normalize to sum <= 1
-            weights = np.random.uniform(0, 1, len(predecessors))
-            total = sum(weights)
-            if total > 0:  # Avoid division by zero
-                weights = weights * (np.random.uniform(0, 1) / total)
-            else:
-                weights = np.zeros(len(predecessors))
-            # Assign weights to edges
-            for pred, weight in zip(predecessors, weights):
-                edge_weights[(pred, node)] = weight
-
+def LT(g, threshold, initial_active: set = None):
     # Initialize active nodes
     active = set(initial_active) if initial_active else set()
     influence_result = set(active)  # Track all influenced nodes
@@ -66,15 +47,12 @@ def LT(g, initial_active: set = None):
         for node in g.nodes():
             if node not in influence_result:  # Not yet influenced
                 # Sum weights from active predecessors
-                total_influence = sum(
-                    edge_weights.get((pred, node), 0)
-                    for pred in g.predecessors(node)
-                    if pred in influence_result
+                total_influence = len(
+                    [pred for pred in g.predecessors(node) if pred in influence_result]
                 )
                 # Check if threshold is exceeded
-                if total_influence >= thresholds[node]:
+                if total_influence >= threshold:
                     influence_result.add(node)
                     new_active = True
 
     return influence_result
-        
