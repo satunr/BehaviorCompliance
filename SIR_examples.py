@@ -24,6 +24,10 @@ filename = 'contact_network_text.txt'
 # Create the graph from the file
 contact_graph = parse.parse(filename)
 
+# Test on a treelike network
+# depth = 7
+# contact_network = nx.balanced_tree(r=2, h=depth-1)  # r=2 for binary tree, h=depth-1 gives 2^7-1 nodes
+
 # Relabel nodes in parsed graph to avoid off by 1 errors in SIR.py
 # Create a mapping from old node to new node: i -> i - 1
 mapping = {node: node - 1 for node in contact_graph.nodes()}

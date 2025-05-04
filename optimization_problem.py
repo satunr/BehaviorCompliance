@@ -1,127 +1,71 @@
 import networkx as nx
 import matplotlib.pyplot as plt
-import IM
 import parse
-import find_seeds
 import correlated_graphs
+import SIR
+import numpy as np
 
-run_maximization = True
+#---------
+#
+#  Optimization problem: Minimize loss between I.C., L.T. models, 
+#    to arrive at a more deterministic construction of unknown social network
+#    Assumption: Threshold value is the same for all nodes
+#    f: Z -> Z, and we want f(X*) approx A in Z, where A is the observed I.C. results
+#      Learnable parameter: Tau - Threshold for L.T. simulation.
+#
+#---------
 
-def find_best_integer(g,seeds:set,A,X_min,X_max):
-    """
-    Find integer X >= 2 such that f(X) ≈ A, where f: Z -> Z is monotone decreasing.
-    
-    Args:
-        f: Function mapping integers to integers, monotone decreasing.
-        A: Target real number (float).
-        X_min: Minimum integer X.
-        X_max: Maximum integer X to search.
-    
-    Returns:
-        Integer X that minimizes |f(X) - A|.
-    """
+T = 200
+Repeat = 1
 
-    # Initialize bounds
-    low = X_min
-    high = X_max
-    
-    # If A is outside the range of f, handle edge cases
-    if len(IM.LT(g,X_min,seeds)) < A:
-        return X_min  # Smallest X gives largest f(X), still too small
-    if len(IM.LT(g,X_max,seeds)) > A:
-        return X_max  # Largest X gives smallest f(X), still too large
-    
-    # Binary search
-    best_X = None
-    min_diff = float('inf')
-    
-    while low <= high:
-        mid = (low + high) // 2
-        f_mid = len(IM.LT(mid))
-        
-        # Evaluate difference
-        diff = abs(f_mid - A)
-        if diff < min_diff:
-            min_diff = diff
-            best_X = mid
-        
-        # Adjust search based on monotonicity
-        if f_mid > A:
-            low = mid + 1  # Need smaller f(X), so increase X
-        elif f_mid < A:
-            high = mid - 1  # Need larger f(X), so decrease X
-        else:
-            return mid  # Exact match (unlikely since A is float)
-    
-    # Check consecutive integers around the best X
-    candidates = [best_X]
-    if best_X > X_min:
-        candidates.append(best_X - 1)
-    if best_X < X_max:
-        candidates.append(best_X + 1)
-    
-    # Return X with smallest |f(X) - A|
-    return min(candidates, key=lambda x: abs(len(IM.LT(g,x,seeds)) - A))
+beta = 0.10  #infection rate
+gamma = 0.05  # recovery rate
+mu = 0.10   # immunity loss
+init = 0.05
 
-# We will use this to make graph representation of the optimization problem cleaner
-def truncate_at_value(lst, val, include_val=True):
-    try:
-        idx = lst.index(val)
-        return lst[:idx + 1] if include_val else lst[:idx]
-    except ValueError:
-        return lst[:]  # Return copy of original list if val not found
+# Specify the filename
+filename = 'contact_network_text.txt'
+# Create the graph from the file
+contact_graph = parse.parse(filename)
+# Relabel nodes in parsed graph to avoid off by 1 errors in SIR.py
+# Create a mapping from old node to new node: i -> i - 1
+mapping = {node: node - 1 for node in contact_graph.nodes()}
 
-if run_maximization == True:
-    # Specify the filename
-    filename = 'contact_network_text.txt'
-    # Create the graph from the file
-    contact_graph = parse.parse(filename)  # Requires a lot of computational power
-    seeds = find_seeds.find_seed_set(contact_graph, 20)
+# Relabel the nodes
+contact_network = nx.relabel_nodes(contact_graph, mapping)
+social_network = correlated_graphs.create_w_k_hop_correlation(contact_network,k=1)[0]   # We just want the graph part of this output
 
-    social_graph = correlated_graphs.create_w_k_hop_correlation(contact_graph, 2)[0]  # Just want the graph here
+# Set NumPy print options to show all rows and columns for the following data
+np.set_printoptions(threshold=np.inf)
 
-    maximization_result = IM.greedy(social_graph, 11, seeds)
-    max_influence = len(maximization_result[0])
+# Array of arrays of quarantine statuses
+ic_results = SIR.Simulate_SIR(contact_network=contact_network,social_network=social_network,T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,verbose=False,q=True,allow_restoration=True,save_all=True)
+data1 = ic_results[3]
+data1 = np.array(data1, dtype=float)
+# Normalize: Set non-zero values to 1, keep zeros as 0
+data1 = np.where(data1 != 0, 1, 0)
 
-    thresholds = [i for i in range(2,6)]
-    lt_result = []
-    for threshold in thresholds:
-        lt_result.append(len(IM.LT(social_graph, threshold, seeds)))
+print("data1 normalized: ")
+print(data1)
 
-    # Create bar graph
-    # plt.figure(figsize=(8, 6))
-    # plt.bar(thresholds, lt_result, color='skyblue', edgecolor='black')
-    # plt.axhline(y=max_influence, color='red', linestyle=':', linewidth=2, label='True Influence')
-    # plt.xlabel('Threshold')
-    # plt.ylabel('Number of Influenced Nodes')
-    # plt.title('Influence Spread vs. Threshold')
-    # plt.xticks(thresholds)
-    # plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+lt_results = SIR.Simulate_SIR(contact_network=contact_network,social_network=social_network,T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,verbose=False,q=True,allow_restoration=True,save_all=True,lt_threshold=3)
+data2 = lt_results[3]
+infections = lt_results[4]
+data2 = np.array(data2, dtype=float)
+# Normalize: Set non-zero values to 1, keep zeros as 0
+data2 = np.where(data2 != 0, 1, 0)
 
-    # # Save the plot
-    # # plt.savefig('lt_influence_bar_graph.png')
-    # plt.show()
+print("data2 normalized: ")
+print(data2)
 
-    
-    #-----------
-    #
-    #  Fitting problem (using binary search)
-    #
-    #-----------
+print("infections: ", infections)
+# conversion: Extract values from each dictionary
+infections_array = np.array([list(d.values()) for d in infections], dtype=np.int64)
+# Normalize: Set non-zero values to 1, keep zeros as 0
+infections = np.where(infections != 0, 1, 0)
 
-    X_fitted = find_best_integer(social_graph,seeds,maximization_result,2,10)
-    thresholds = truncate_at_value(thresholds,X_fitted)
+Q = data2 * infections
+loss = (data1 - Q) ** 2
+loss = np.sum(loss)
+print("loss: ", loss)
 
-    # Create bar graph
-    plt.figure(figsize=(8, 6))
-    plt.bar(thresholds, lt_result, color='skyblue', edgecolor='black')
-    plt.axhline(y=max_influence, color='red', linestyle=':', linewidth=2, label='True Influence')
-    plt.xlabel('Threshold')
-    plt.ylabel('Number of Influenced Nodes')
-    plt.title('Influence Spread vs. Threshold')
-    plt.xticks(thresholds)
-    plt.grid(True, axis='y', linestyle='--', alpha=0.7)
-
-    # Save the plot
-    # plt.savefig('lt_influence_bar_graph.png')
-    plt.show()
