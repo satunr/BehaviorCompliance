@@ -67,7 +67,7 @@ data1 = np.where(data1 != 0, 1, 0)
 #-------
 
 losses = []
-for i in range(1,30):
+for i in range(1,15):
     # Inferred data using L.T.
     lt_results = SIR.Simulate_SIR(contact_network=contact_network,social_network=social_network,T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,average_data=False,q=True,allow_restoration=True,save_all=True,lt_threshold=i)
     data2 = lt_results[3]
@@ -87,8 +87,8 @@ x_vals = list(range(len(losses)))  # Integer x-values: 0 to 99
 plt.figure(figsize=(12, 6))
 plt.bar(x_vals, losses, color='skyblue', edgecolor='black')
 plt.axhline(y=np.sum(data1), color='red', linestyle='--', linewidth=2, label='y = observed result')
-plt.xlabel('Node Index')
-plt.ylabel('Node Degree')
+plt.xlabel('Threshold')
+plt.ylabel('Loss wrt # of informed')
 plt.title('Loss between average observed and inferred quarantine data')
 plt.grid(True, axis='y', linestyle='--', alpha=0.7)
 plt.tight_layout()
