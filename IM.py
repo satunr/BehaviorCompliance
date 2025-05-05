@@ -19,7 +19,8 @@ def IC(g, S, p, mc=1000):
     return np.mean(spread)
 
 # k: Number of nodes that are allowed to be informed
-def greedy(g, k, seeds, p=0.1, mc=1000):
+def greedy(g,k,seeds,p=0.1,mc=100):
+    if k == None: k = len(seeds)  # if no restriction is present, run IM on all seeds passed in arg
     S = []
     spread = []
     for _ in range(k):
@@ -39,7 +40,7 @@ def greedy(g, k, seeds, p=0.1, mc=1000):
 def greedy_for_lt(g, seed_candidates, k, threshold):
     selected_seeds = set()
     current_spread = 0
-
+    if k == None: k = len(seed_candidates)  # if no restriction is present, run IM on all seeds passed in arg
     for _ in range(k):
         best_node = None
         best_spread = -1
@@ -65,14 +66,15 @@ def greedy_for_lt(g, seed_candidates, k, threshold):
 
     return selected_seeds, current_spread
 
-def LT(g, threshold, initial_active: set = None):
+def LT(g, threshold, initial_active: set = None, mc=100):
     # Initialize active nodes
     active = set(initial_active) if initial_active else set()
     influence_result = set(active)  # Track all influenced nodes
     new_active = True
 
     # Iterative activation process
-    while new_active:
+    i = 0
+    while new_active and i <= mc:
         new_active = False
         for node in g.nodes():
             if node not in influence_result:  # Not yet influenced
@@ -83,6 +85,7 @@ def LT(g, threshold, initial_active: set = None):
                 # Check if threshold is exceeded
                 if total_influence >= threshold:
                     influence_result.add(node)
-                    new_active = True
+                new_active = True
+        i = i + 1
 
     return influence_result

@@ -26,14 +26,14 @@ def find_seed_set(g, num_seeds, exponent=1):
     return seed_set
 
 # lt == True: linear threshold model. lt == False: independent cascade model
-def initialize_social_IM(social_network,k,p,num_seeds,lt_threshold = None):
+def initialize_social_IM(social_network,k=None,p=0.3,num_seeds=1,lt_threshold = None):
     seeds = find_seed_set(social_network, num_seeds, exponent=1)
     if lt_threshold == None:
         result = IM.greedy(social_network, k, seeds, p)
     else:
         result = IM.greedy_for_lt(social_network, seeds, k, lt_threshold)
     max_influence = result[0]
-    # spread = result[1]
+    spread = result[1]
 
     return max_influence
 

@@ -115,7 +115,10 @@ def restore_edges(g_init, g, node):
 # Wrapper I wrote around the example code that was here to begin with
 # q: Set to true if you want quarantine periods to be factored into algorithm
 # save_all: Returns large array containing quarantine states at every time interval
-def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,verbose,q=True,allow_restoration=False,save_all=False,lt_threshold=None):
+def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,average_data,q=True,allow_restoration=False,save_all=False,lt_threshold=None):
+    save_contact = deepcopy(contact_network)
+    save_social = deepcopy(social_network)
+
     n = len(contact_network.nodes())
     All_Init = {t: [] for t in range(T + 1)}
     for _ in range(Repeat):
@@ -123,7 +126,7 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,verb
         P = n - N
 
         # k: # of seeds we want
-        max_influence = find_seeds.initialize_social_IM(social_network=social_network,k=20,p=0.03,num_seeds=30,lt_threshold=lt_threshold)  # Create a social network, run IM on it
+        informed = find_seeds.initialize_social_IM(social_network=social_network,p=0.03,num_seeds=15,lt_threshold=lt_threshold)  # Create a social network, run IM on it
 
         # We are saving the initial state of G so we know what connections to restore later
         G_initial = deepcopy(contact_network)
@@ -151,14 +154,14 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,verb
         quarantine_statuses = [0 for _ in range(0, n)]
 
         # Set labels for informed set
-        for node in max_influence:
+        for node in informed:
             if state[node] == 1:
                 nx.set_node_attributes(contact_network, {node: {'Informed?': 'Informed'}})
 
         all_quaratines = []
         all_infections = []
         for t in range(T):
-            print("state: ", state)
+            # print("state: ", state)
 
             if save_all == True:
                 all_quaratines.append(quarantine_statuses.copy())
@@ -186,7 +189,7 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,verb
                         quarantine_edge_removal(g=contact_network, node=u, states=state)
 
                 # if applicable (node u infected in both T(n-1) and T(n), and is informed), update quarantine status for node u
-                elif copy_state[u] == state[u] and copy_state[u] == 1 and q == True and node in max_influence:
+                elif copy_state[u] == state[u] and copy_state[u] == 1 and q == True and node in informed:
                     # Individual chooses, at the first step in their infection, whether they want to quarantine
                     # Add +1 to their quarantine period
                     quarantine_statuses[u] = quarantine_statuses[u] + 1
@@ -213,7 +216,7 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,verb
         infection_data.append(x_data)
         infection_data.append(y_data_inf)
 
-        if verbose:
+        if average_data:
             # Plot infection frequency
             plt.plot([t for t in range(T + 1)], Inf, alpha=0.1)
             for t in range(T + 1):
@@ -228,6 +231,10 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,verb
             plt.tight_layout()
             plt.savefig('Information.png')
             plt.show()
+
+    # Revert network changes
+    contact_network = save_contact
+    social_network = save_social
 
     # Return the graph and the list of state change tuples, and all quarantine statuses (if applicable)
     if save_all == True:
