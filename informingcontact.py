@@ -40,8 +40,6 @@ init = 0.05
 verbose = False # Set to false if you don't want to plot anything from SIR.py
 q = False
 
-
-
 # Specify the filename
 filename = 'contact_network_text.txt'
 # Create the graph from the file

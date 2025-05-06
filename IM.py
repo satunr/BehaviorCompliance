@@ -2,7 +2,7 @@ import numpy as np
 import random
 import networkx as nx
 
-def IC(g, S, p, mc=1000):
+def IC(g, S, p, mc=15):
     spread = []
     for _ in range(mc):
         new_active, A = S[:], S[:]
@@ -66,7 +66,7 @@ def greedy_for_lt(g, seed_candidates, k, threshold):
 
     return selected_seeds, current_spread
 
-def LT(g, threshold, initial_active: set = None, mc=100):
+def LT(g, threshold, initial_active: set = None, mc=15):
     # Initialize active nodes
     active = set(initial_active) if initial_active else set()
     influence_result = set(active)  # Track all influenced nodes

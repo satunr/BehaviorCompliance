@@ -129,7 +129,4 @@ if parse_example == True:
 
         plt.tight_layout()
         plt.show()
-
-
-
-
+        

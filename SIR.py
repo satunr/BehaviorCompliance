@@ -126,7 +126,12 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
         P = n - N
 
         # k: # of seeds we want
-        informed = find_seeds.initialize_social_IM(social_network=social_network,p=0.03,num_seeds=15,lt_threshold=lt_threshold)  # Create a social network, run IM on it
+        informed = find_seeds.initialize_social_IM(social_network=social_network,p=0.03,k=10,num_seeds=15,lt_threshold=lt_threshold)  # Create a social network, run IM on it
+
+        # Set labels for informed set
+        for node in informed:
+            nx.set_node_attributes(contact_network, {node: {'Informed?': 'Informed'}})
+            nx.set_node_attributes(social_network, {node: {'Informed?': 'Informed'}})
 
         # We are saving the initial state of G so we know what connections to restore later
         G_initial = deepcopy(contact_network)
@@ -153,26 +158,20 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
         # This will hold sums: +1 to ith element if node i is infected 1 at both T(n-1) and T(n)
         quarantine_statuses = [0 for _ in range(0, n)]
 
-        # Set labels for informed set
-        for node in informed:
-            if state[node] == 1:
-                nx.set_node_attributes(contact_network, {node: {'Informed?': 'Informed'}})
-
         all_quaratines = []
         all_infections = []
-        for t in range(T):
-            # print("state: ", state)
 
+        for t in range(T):
             if save_all == True:
                 all_quaratines.append(quarantine_statuses.copy())
                 all_infections.append(state)
-
-            copy_state = deepcopy(state)
 
             # Dynamic updates
             P_prime, P, N = update_N_P(P, N, n)
             L = transition(L, P_prime)
 
+            # Make copy before modifying
+            copy_state = deepcopy(state)
             # Update state using SIRS model
             state = sirs_step(contact_network, state, L, beta, gamma, mu)
 
@@ -231,6 +230,9 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
             plt.tight_layout()
             plt.savefig('Information.png')
             plt.show()
+    
+    temp_contact = deepcopy(contact_network)
+    temp_social = deepcopy(social_network)
 
     # Revert network changes
     contact_network = save_contact
@@ -238,5 +240,5 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
 
     # Return the graph and the list of state change tuples, and all quarantine statuses (if applicable)
     if save_all == True:
-        return contact_network, state_changes, infection_data, all_quaratines, all_infections
-    return contact_network, state_changes, infection_data
+        return temp_contact, state_changes, infection_data, all_quaratines, all_infections, temp_social
+    return temp_contact, state_changes, infection_data

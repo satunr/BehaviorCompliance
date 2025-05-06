@@ -4,18 +4,57 @@ import parse
 import correlated_graphs
 import SIR
 import numpy as np
+import py4cytoscape as p4c
+
+# list: List of np matrices
+def binary_matrix_average(data: np.array):
+    sum_matrix = np.sum(data, axis=0)
+    avg_matrix = sum_matrix / len(data)
+
+    print("avg_matrix: ", avg_matrix)
+    avg_matrix = modify_array(avg_matrix)
+    return avg_matrix
+
+def modify_array(arr: np.array):
+    # Step 0: Keep zeros as 0 (no action needed yet)
+    
+    # Step 1: Find the minimum positive value (> 0)
+    positive_vals = arr[arr > 0]
+    if positive_vals.size == 0:
+        # Handle case where there are no positive values
+        print("No positive values in array. Returning original array.")
+        return arr.copy()
+    
+    min_val = np.min(positive_vals)
+    
+    # Step 2: Create a copy of the array to modify
+    result = arr.copy()
+    
+    # Step 3: Replace min_val with 0
+    result[result == min_val] = 0
+    
+    # Step 4: Replace all other non-zero values with 1
+    result[(result != 0) & (result > 0)] = 1
+    
+    return result
+
+# TODO: Write this function
+# labels: takes in an ordered triple: (node, state, time of transition)
+# def apply_state_labels(graph: nx.Graph, labels):
+
+
 
 #---------
 #
 #  Optimization problem: Minimize loss between I.C., L.T. models, 
-#    to arrive at a more deterministic construction of unknown social network
+#    to arrive at a deterministic construction of unknown social network
 #    Assumption: Threshold value is the same for all nodes
 #    f: Z -> Z, and we want f(X*) approx A in Z, where A is the observed I.C. results
 #      Learnable parameter: Tau - Threshold for L.T. simulation.
 #
 #---------
 
-T = 200
+T = 40
 Repeat = 1
 
 beta = 0.10  #infection rate
@@ -30,9 +69,13 @@ init = 0.05
 # contact_graph = parse.parse(filename)
 
 # Test on tree-like network
-depth = 6
-contact_network = nx.balanced_tree(r=3, h=depth-1)  # r=2 for binary tree, h=depth-1 gives 2^7-1 nodes
-print("Num of nodes: ", len(contact_network.nodes()))
+# depth = 6
+# contact_network = nx.balanced_tree(r=3, h=depth-1)  # r=2 for binary tree, h=depth-1 gives 2^7-1 nodes
+# print("Num of nodes: ", len(contact_network.nodes()))
+
+# Test on a highly-connected graph
+# Create Erdős-Rényi graph with 100 nodes and edge probability p=0.5
+contact_network = nx.erdos_renyi_graph(100, 0.2)
 
 # Relabel nodes in parsed graph to avoid off by 1 errors in SIR.py
 # Create a mapping from old node to new node: i -> i - 1
@@ -51,14 +94,53 @@ np.set_printoptions(threshold=np.inf)
 #
 #--------
 
-# Average the data
+# TODO: Average the observed SIR data
 data1_avg = []
-# Array of arrays of quarantine statuses
-ic_results = SIR.Simulate_SIR(contact_network=contact_network,social_network=social_network,T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,average_data=False,q=True,allow_restoration=True,save_all=True)
-data1 = ic_results[3]
-data1 = np.array(data1, dtype=float)
-# Normalize: Set non-zero values to 1, keep zeros as 0
-data1 = np.where(data1 != 0, 1, 0)
+cyto_contact = None
+cyto_social = None
+for i in range(0,7):
+    # Array of arrays of quarantine statuses
+    ic_results = SIR.Simulate_SIR(contact_network=contact_network,social_network=social_network,T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,average_data=False,q=True,allow_restoration=True,save_all=True)
+    cyto_contact = ic_results[0]
+    cyto_social = ic_results[5]
+
+    data1 = ic_results[3]
+    data1 = np.array(data1, dtype=float)
+    # Normalize: Set non-zero values to 1, keep zeros as 0
+    data1 = np.where(data1 != 0, 1, 0)
+    data1_avg.append(data1)
+
+# Take average of simulation data
+# New shape of data1_avg: array of Node x Time arrays
+data1 = binary_matrix_average(np.array(data1_avg))
+
+
+# Verify connection to Cytoscape
+print(p4c.cytoscape_ping())
+
+# Export the NetworkX graph to Cytoscape
+network1 = p4c.create_network_from_networkx(cyto_contact, collection="My Network Collection", title="Contact after I.C.")
+
+# Apply a layout (e.g., force-directed)
+p4c.layout_network("force-directed")
+
+# Apply a default visual style
+p4c.set_visual_style("default")
+
+
+# Verify connection to Cytoscape
+print(p4c.cytoscape_ping())
+
+# Export the NetworkX graph to Cytoscape
+network2 = p4c.create_network_from_networkx(cyto_social, collection="My Network Collection", title="Social after I.C.")
+
+# Apply a layout (e.g., force-directed)
+p4c.layout_network("force-directed")
+
+# Apply a default visual style
+p4c.set_visual_style("default")
+
+
 
 #-------
 #
@@ -67,9 +149,38 @@ data1 = np.where(data1 != 0, 1, 0)
 #-------
 
 losses = []
-for i in range(1,15):
+for i in range(2,4):
     # Inferred data using L.T.
     lt_results = SIR.Simulate_SIR(contact_network=contact_network,social_network=social_network,T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,average_data=False,q=True,allow_restoration=True,save_all=True,lt_threshold=i)
+    cyto_contact = lt_results[0]
+    cyto_social = lt_results[5]
+
+    # Verify connection to Cytoscape
+    print(p4c.cytoscape_ping())
+
+    # Export the NetworkX graph to Cytoscape
+    network1 = p4c.create_network_from_networkx(cyto_contact, collection="My Network Collection", title=f"Contact after L.T. (Tau = {i})")
+
+    # Apply a layout (e.g., force-directed)
+    p4c.layout_network("force-directed")
+
+    # Apply a default visual style
+    p4c.set_visual_style("default")
+
+
+    # Verify connection to Cytoscape
+    print(p4c.cytoscape_ping())
+
+    # Export the NetworkX graph to Cytoscape
+    network2 = p4c.create_network_from_networkx(cyto_social, collection="My Network Collection", title=f"Social after L.T. (Tau = {i})")
+
+    # Apply a layout (e.g., force-directed)
+    p4c.layout_network("force-directed")
+
+    # Apply a default visual style
+    p4c.set_visual_style("default")
+    
+
     data2 = lt_results[3]
     data2 = np.array(data2, dtype=float)
     # Normalize: Set non-zero values to 1, keep zeros as 0
@@ -81,7 +192,7 @@ for i in range(1,15):
     losses.append(loss)
     print(f"loss with threshold of {i}: {loss}")
 
-x_vals = list(range(len(losses)))  # Integer x-values: 0 to 99
+x_vals = list(range(len(losses)))
 
 # Create the bar graph
 plt.figure(figsize=(12, 6))
