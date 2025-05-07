@@ -2,7 +2,7 @@ import numpy as np
 import random
 import networkx as nx
 
-def IC(g, S, p, mc=15):
+def IC(g, S, p, mc=5000):
     spread = []
     for _ in range(mc):
         new_active, A = S[:], S[:]
@@ -19,7 +19,7 @@ def IC(g, S, p, mc=15):
     return np.mean(spread)
 
 # k: Number of nodes that are allowed to be informed
-def greedy(g,k,seeds,p=0.1,mc=100):
+def greedy(g,k,seeds,p=0.1,mc=5000):
     if k == None: k = len(seeds)  # if no restriction is present, run IM on all seeds passed in arg
     S = []
     spread = []
@@ -37,7 +37,7 @@ def greedy(g,k,seeds,p=0.1,mc=100):
     return S, spread
 
 # k: # of seeds nodes that can be chosen to inform
-def greedy_for_lt(g, seed_candidates, k, threshold):
+def greedy_for_lt(g, seed_candidates, k=3, threshold=1):
     selected_seeds = set()
     current_spread = 0
     if k == None: k = len(seed_candidates)  # if no restriction is present, run IM on all seeds passed in arg
@@ -66,15 +66,14 @@ def greedy_for_lt(g, seed_candidates, k, threshold):
 
     return selected_seeds, current_spread
 
-def LT(g, threshold, initial_active: set = None, mc=15):
+def LT(g, threshold, initial_active: set = None, mc=5000):
     # Initialize active nodes
     active = set(initial_active) if initial_active else set()
     influence_result = set(active)  # Track all influenced nodes
     new_active = True
 
     # Iterative activation process
-    i = 0
-    while new_active and i <= mc:
+    while new_active:
         new_active = False
         for node in g.nodes():
             if node not in influence_result:  # Not yet influenced
@@ -86,6 +85,5 @@ def LT(g, threshold, initial_active: set = None, mc=15):
                 if total_influence >= threshold:
                     influence_result.add(node)
                 new_active = True
-        i = i + 1
 
     return influence_result

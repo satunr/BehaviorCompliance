@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import find_seeds
 # import correlated_graphs
 # import parse
+import IM
 
 from copy import deepcopy
 
@@ -44,35 +45,35 @@ def sirs_step(G, state, L, beta, gamma, mu):
     return new_state
 
 
-def transition(L, P_prime):
+# def transition(L, P_prime):
 
-    all_0s = [i for i in range(len(L)) if L[i] == 0]
-    all_1s = [i for i in range(len(L)) if L[i] == 1]
+#     all_0s = [i for i in range(len(L)) if L[i] == 0]
+#     all_1s = [i for i in range(len(L)) if L[i] == 1]
 
-    t0 = np.random.choice(all_0s, size=P_prime)
-    t1 = np.random.choice(all_1s, size=P_prime)
+#     t0 = np.random.choice(all_0s, size=P_prime)
+#     t1 = np.random.choice(all_1s, size=P_prime)
 
-    if P_prime > 0:
-        for i in t0:
-            L[i] = 1
-    elif P_prime < 0:
-        for i in t1:
-            L[i] = 0
+#     if P_prime > 0:
+#         for i in t0:
+#             L[i] = 1
+#     elif P_prime < 0:
+#         for i in t1:
+#             L[i] = 0
 
-    return L
+#     return L
 
 
-def update_N_P(P, N, n, a=0.5, v=0.05):
+# def update_N_P(P, N, n, a=0.5, v=0.05):
 
-    X = (P - N) / n
-    X_prime = (1 - X) * v * np.exp(a * X) - (1 + X) * v * np.exp(-a * X)  # Compute X'
+#     X = (P - N) / n
+#     X_prime = (1 - X) * v * np.exp(a * X) - (1 + X) * v * np.exp(-a * X)  # Compute X'
 
-    P_prime = math.ceil((n * X_prime) / 2.0)
+#     P_prime = math.ceil((n * X_prime) / 2.0)
 
-    P = P + P_prime
-    N = N - P_prime
+#     P = P + P_prime
+#     N = N - P_prime
 
-    return P_prime, P, N
+#     return P_prime, P, N
 
 #-----------
 #
@@ -162,13 +163,41 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
         all_infections = []
 
         for t in range(T):
+            #--------
+            #
+            #  Make changes to the set of informed nodes
+            #
+            #-------
+
+            new_informed = None
+            if lt_threshold == None: # If we are using I.C., that is
+                new_informed = IM.greedy(social_network, k=3, seeds=informed)[0]
+                for node in new_informed:
+                    informed.append(node)   
+
+            else:
+                new_informed = IM.greedy_for_lt(social_network, informed, threshold=lt_threshold)[0]
+                for node in new_informed:
+                    informed.append(node) 
+            
+            # Set labels for informed set
+            for node in new_informed:
+                nx.set_node_attributes(contact_network, {node: {'Informed?': 'Informed'}})
+                nx.set_node_attributes(social_network, {node: {'Informed?': 'Informed'}})
+
             if save_all == True:
                 all_quaratines.append(quarantine_statuses.copy())
                 all_infections.append(state)
 
+            #--------
+            #
+            #  Make contact network changes
+            #
+            #--------
+
             # Dynamic updates
-            P_prime, P, N = update_N_P(P, N, n)
-            L = transition(L, P_prime)
+            # P_prime, P, N = update_N_P(P, N, n)
+            # L = transition(L, P_prime)
 
             # Make copy before modifying
             copy_state = deepcopy(state)

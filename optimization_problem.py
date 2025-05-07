@@ -5,6 +5,9 @@ import correlated_graphs
 import SIR
 import numpy as np
 import py4cytoscape as p4c
+import re
+
+ping_cytoscape = False
 
 # list: List of np matrices
 def binary_matrix_average(data: np.array):
@@ -15,6 +18,7 @@ def binary_matrix_average(data: np.array):
     avg_matrix = modify_array(avg_matrix)
     return avg_matrix
 
+# Achieves rough estimate of "average" SIR quarantine data
 def modify_array(arr: np.array):
     # Step 0: Keep zeros as 0 (no action needed yet)
     
@@ -38,10 +42,31 @@ def modify_array(arr: np.array):
     
     return result
 
-# TODO: Write this function
-# labels: takes in an ordered triple: (node, state, time of transition)
-# def apply_state_labels(graph: nx.Graph, labels):
-
+def parse_loss_data(file_path):
+    thresholds = []
+    losses = []
+    
+    with open(file_path, 'r') as file:
+        for line in file:
+            # Remove leading/trailing whitespace
+            line = line.strip()
+            if line.startswith('loss with threshold of'):
+                # Split the line into parts
+                parts = line.split(':')
+                if len(parts) == 2:
+                    # Extract threshold (between 'of' and ':')
+                    threshold_part = parts[0].split('of')[1].strip()
+                    # Extract loss
+                    loss_part = parts[1].strip()
+                    try:
+                        threshold = int(threshold_part)
+                        loss = float(loss_part)
+                        thresholds.append(threshold)
+                        losses.append(loss)
+                    except ValueError:
+                        continue  # Skip lines that can't be converted to numbers
+    
+    return thresholds, losses
 
 
 #---------
@@ -54,153 +79,177 @@ def modify_array(arr: np.array):
 #
 #---------
 
-T = 40
-Repeat = 1
+def RunLossCalc():
+    T = 40
+    Repeat = 1
 
-beta = 0.10  #infection rate
-gamma = 0.05  # recovery rate
-mu = 0.10   # immunity loss
-init = 0.05
+    beta = 0.10  #infection rate
+    gamma = 0.05  # recovery rate
+    mu = 0.10   # immunity loss
+    init = 0.05
 
-# Real-world network data
-# Specify the filename
-# filename = 'contact_network_text.txt'
-# # Create the graph from the file
-# contact_graph = parse.parse(filename)
+    # Real-world network data
+    # Specify the filename
+    # filename = 'contact_network_text.txt'
+    # # Create the graph from the file
+    # contact_graph = parse.parse(filename)
 
-# Test on tree-like network
-# depth = 6
-# contact_network = nx.balanced_tree(r=3, h=depth-1)  # r=2 for binary tree, h=depth-1 gives 2^7-1 nodes
-# print("Num of nodes: ", len(contact_network.nodes()))
+    # Test on tree-like network
+    # depth = 6
+    # contact_network = nx.balanced_tree(r=3, h=depth-1)  # r=2 for binary tree, h=depth-1 gives 2^7-1 nodes
+    # print("Num of nodes: ", len(contact_network.nodes()))
 
-# Test on a highly-connected graph
-# Create Erdős-Rényi graph with 100 nodes and edge probability p=0.5
-contact_network = nx.erdos_renyi_graph(100, 0.2)
+    # Test on a highly-connected graph
+    # Create Erdős-Rényi graph with 100 nodes and edge probability p=0.5
+    contact_network = nx.erdos_renyi_graph(100, 0.2)
 
-# Relabel nodes in parsed graph to avoid off by 1 errors in SIR.py
-# Create a mapping from old node to new node: i -> i - 1
-# mapping = {node: node - 1 for node in contact_graph.nodes()}
+    # Relabel nodes in parsed graph to avoid off by 1 errors in SIR.py
+    # Create a mapping from old node to new node: i -> i - 1
+    # mapping = {node: node - 1 for node in contact_graph.nodes()}
 
-# Relabel the nodes
-# contact_network = nx.relabel_nodes(contact_graph, mapping)
-social_network = correlated_graphs.create_w_k_hop_correlation(contact_network,k=2)[0]   # We just want the graph part of this output
+    # Relabel the nodes
+    # contact_network = nx.relabel_nodes(contact_graph, mapping)
+    social_network = correlated_graphs.create_w_k_hop_correlation(contact_network,k=2)[0]   # We just want the graph part of this output
 
-# Set NumPy print options to show all rows and columns data
-np.set_printoptions(threshold=np.inf)
+    # Set NumPy print options to show all rows and columns data
+    np.set_printoptions(threshold=np.inf)
 
-#--------
-#
-#  Observed data (from I.C.)
-#
-#--------
+    #--------
+    #
+    #  Observed data (from I.C.)
+    #
+    #--------
 
-# TODO: Average the observed SIR data
-data1_avg = []
-cyto_contact = None
-cyto_social = None
-for i in range(0,7):
-    # Array of arrays of quarantine statuses
-    ic_results = SIR.Simulate_SIR(contact_network=contact_network,social_network=social_network,T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,average_data=False,q=True,allow_restoration=True,save_all=True)
+    data1_avg = []
+    cyto_contact = None
+    cyto_social = None
+    ic_results = None
+
+    for i in range(0,7):
+        # Array of arrays of quarantine statuses
+        ic_results = SIR.Simulate_SIR(contact_network=contact_network,social_network=social_network,T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,average_data=False,q=True,allow_restoration=True,save_all=True)
+
+        data1 = ic_results[3]
+        data1 = np.array(data1, dtype=float)
+        # Normalize: Set non-zero values to 1, keep zeros as 0
+        data1 = np.where(data1 != 0, 1, 0)
+        data1_avg.append(data1)
+
     cyto_contact = ic_results[0]
     cyto_social = ic_results[5]
 
-    data1 = ic_results[3]
-    data1 = np.array(data1, dtype=float)
-    # Normalize: Set non-zero values to 1, keep zeros as 0
-    data1 = np.where(data1 != 0, 1, 0)
-    data1_avg.append(data1)
+    # Take average of simulation data
+    # New shape of data1_avg: array of Node x Time arrays
+    data1 = binary_matrix_average(np.array(data1_avg))
 
-# Take average of simulation data
-# New shape of data1_avg: array of Node x Time arrays
-data1 = binary_matrix_average(np.array(data1_avg))
+    if ping_cytoscape == True:
+        # Verify connection to Cytoscape
+        print(p4c.cytoscape_ping())
 
+        # Export the NetworkX graph to Cytoscape
+        network1 = p4c.create_network_from_networkx(cyto_contact, collection="My Network Collection", title="Contact after I.C.")
 
-# Verify connection to Cytoscape
-print(p4c.cytoscape_ping())
+        # Apply a layout (e.g., force-directed)
+        p4c.layout_network("force-directed")
 
-# Export the NetworkX graph to Cytoscape
-network1 = p4c.create_network_from_networkx(cyto_contact, collection="My Network Collection", title="Contact after I.C.")
-
-# Apply a layout (e.g., force-directed)
-p4c.layout_network("force-directed")
-
-# Apply a default visual style
-p4c.set_visual_style("default")
+        # Apply a default visual style
+        p4c.set_visual_style("default")
 
 
-# Verify connection to Cytoscape
-print(p4c.cytoscape_ping())
+        # Verify connection to Cytoscape
+        print(p4c.cytoscape_ping())
 
-# Export the NetworkX graph to Cytoscape
-network2 = p4c.create_network_from_networkx(cyto_social, collection="My Network Collection", title="Social after I.C.")
+        # Export the NetworkX graph to Cytoscape
+        network2 = p4c.create_network_from_networkx(cyto_social, collection="My Network Collection", title="Social after I.C.")
 
-# Apply a layout (e.g., force-directed)
-p4c.layout_network("force-directed")
+        # Apply a layout (e.g., force-directed)
+        p4c.layout_network("force-directed")
 
-# Apply a default visual style
-p4c.set_visual_style("default")
+        # Apply a default visual style
+        p4c.set_visual_style("default")
 
 
 
-#-------
-#
-#  Inferred data using L.T.
-#
-#-------
+    #-------
+    #
+    #  Inferred data using L.T.
+    #
+    #-------
 
-losses = []
-for i in range(2,4):
-    # Inferred data using L.T.
-    lt_results = SIR.Simulate_SIR(contact_network=contact_network,social_network=social_network,T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,average_data=False,q=True,allow_restoration=True,save_all=True,lt_threshold=i)
-    cyto_contact = lt_results[0]
-    cyto_social = lt_results[5]
+    losses = []
+    for i in range(2,15):
+        # Inferred data using L.T.
+        lt_results = SIR.Simulate_SIR(contact_network=contact_network,social_network=social_network,T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,average_data=False,q=True,allow_restoration=True,save_all=True,lt_threshold=i)
+        cyto_contact = lt_results[0]
+        cyto_social = lt_results[5]
 
-    # Verify connection to Cytoscape
-    print(p4c.cytoscape_ping())
+        if ping_cytoscape == True:
+            # Verify connection to Cytoscape
+            print(p4c.cytoscape_ping())
 
-    # Export the NetworkX graph to Cytoscape
-    network1 = p4c.create_network_from_networkx(cyto_contact, collection="My Network Collection", title=f"Contact after L.T. (Tau = {i})")
+            # Export the NetworkX graph to Cytoscape
+            network1 = p4c.create_network_from_networkx(cyto_contact, collection="My Network Collection", title=f"Contact after L.T. (Tau = {i})")
 
-    # Apply a layout (e.g., force-directed)
-    p4c.layout_network("force-directed")
+            # Apply a layout (e.g., force-directed)
+            p4c.layout_network("force-directed")
 
-    # Apply a default visual style
-    p4c.set_visual_style("default")
+            # Apply a default visual style
+            p4c.set_visual_style("default")
 
 
-    # Verify connection to Cytoscape
-    print(p4c.cytoscape_ping())
+            # Verify connection to Cytoscape
+            print(p4c.cytoscape_ping())
 
-    # Export the NetworkX graph to Cytoscape
-    network2 = p4c.create_network_from_networkx(cyto_social, collection="My Network Collection", title=f"Social after L.T. (Tau = {i})")
+            # Export the NetworkX graph to Cytoscape
+            network2 = p4c.create_network_from_networkx(cyto_social, collection="My Network Collection", title=f"Social after L.T. (Tau = {i})")
 
-    # Apply a layout (e.g., force-directed)
-    p4c.layout_network("force-directed")
+            # Apply a layout (e.g., force-directed)
+            p4c.layout_network("force-directed")
 
-    # Apply a default visual style
-    p4c.set_visual_style("default")
-    
+            # Apply a default visual style
+            p4c.set_visual_style("default")
+        
 
-    data2 = lt_results[3]
-    data2 = np.array(data2, dtype=float)
-    # Normalize: Set non-zero values to 1, keep zeros as 0
-    data2 = np.where(data2 != 0, 1, 0)
+        data2 = lt_results[3]
+        data2 = np.array(data2, dtype=float)
+        # Normalize: Set non-zero values to 1, keep zeros as 0
+        data2 = np.where(data2 != 0, 1, 0)
 
-    # Calculate loss between observed, inferred
-    loss = (data1 - data2) ** 2
-    loss = np.sum(loss)
-    losses.append(loss)
-    print(f"loss with threshold of {i}: {loss}")
+        # Calculate loss between observed, inferred
+        loss = (data1 - data2) ** 2
+        loss = np.sum(loss)
+        losses.append(loss)
+        print(f"loss with threshold of {i}: {loss}")
 
-x_vals = list(range(len(losses)))
+    x_vals = list(range(len(losses)))
 
-# Create the bar graph
+    # Create the bar graph
+    plt.figure(figsize=(12, 6))
+    plt.bar(x_vals, losses, color='skyblue', edgecolor='black')
+    plt.axhline(y=np.sum(data1), color='red', linestyle='--', linewidth=2, label='y = observed result')
+    plt.xlabel('Threshold')
+    plt.ylabel('Loss wrt # of informed')
+    plt.title('Loss between average observed and inferred quarantine data')
+    plt.grid(True, axis='y', linestyle='--', alpha=0.7)
+    plt.tight_layout()
+    plt.show()
+
+
+
+# Parse the data (assuming the data is in a file named 'loss_vals.txt')
+thresholds, losses = parse_loss_data('loss_vals.txt')
+
+# Create the plot
 plt.figure(figsize=(12, 6))
-plt.bar(x_vals, losses, color='skyblue', edgecolor='black')
-plt.axhline(y=np.sum(data1), color='red', linestyle='--', linewidth=2, label='y = observed result')
-plt.xlabel('Threshold')
-plt.ylabel('Loss wrt # of informed')
-plt.title('Loss between average observed and inferred quarantine data')
-plt.grid(True, axis='y', linestyle='--', alpha=0.7)
-plt.tight_layout()
-plt.show()
+plt.plot(thresholds, losses, 'b-', label='Loss vs Threshold')
+plt.title('Loss as a Function of Threshold', fontsize=14)
+plt.xlabel('Threshold', fontsize=12)
+plt.ylabel('Loss', fontsize=12)
+plt.grid(True)
+plt.legend()
+
+# Adjust y-axis to accommodate large values
+plt.ylim(min(losses) - 100, max(losses) + 100)
+
+# Save the plot
+plt.savefig('loss_vs_threshold.png')

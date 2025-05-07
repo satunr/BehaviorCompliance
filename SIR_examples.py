@@ -20,20 +20,20 @@ mu = 0.10   # immunity loss
 init = 0.05
 
 # Specify the filename
-filename = 'contact_network_text.txt'
+# filename = 'contact_network_text.txt'
 # Create the graph from the file
-contact_graph = parse.parse(filename)
+# contact_graph = parse.parse(filename)
 
 # Test on a treelike network
-# depth = 6
-# contact_network = nx.balanced_tree(r=3, h=depth-1)  # r=2 for binary tree, h=depth-1 gives 2^7-1 nodes
+depth = 5
+contact_network = nx.balanced_tree(r=3, h=depth-1)  # r=2 for binary tree, h=depth-1 gives 2^7-1 nodes
 
 # Relabel nodes in parsed graph to avoid off by 1 errors in SIR.py
 # Create a mapping from old node to new node: i -> i - 1
-mapping = {node: node - 1 for node in contact_graph.nodes()}
+# mapping = {node: node - 1 for node in contact_graph.nodes()}
 
 # Relabel the nodes
-contact_network = nx.relabel_nodes(contact_graph, mapping)
+# contact_network = nx.relabel_nodes(contact_graph, mapping)
 
 social_network = correlated_graphs.create_w_k_hop_correlation(contact_network,k=1)[0]   # We just want the graph part of this output
 
