@@ -2,7 +2,8 @@ import numpy as np
 import random
 import networkx as nx
 
-def IC(g, S, p, mc=5000):
+# sim: What is used during SIR
+def IC(g, S, p, mc=10):
     spread = []
     for _ in range(mc):
         new_active, A = S[:], S[:]
@@ -16,16 +17,17 @@ def IC(g, S, p, mc=5000):
             A += new_active
         A = list(set(A))
         spread.append(len(A))
+
     return np.mean(spread)
 
 # k: Number of nodes that are allowed to be informed
-def greedy(g,k,seeds,p=0.1,mc=5000):
-    if k == None: k = len(seeds)  # if no restriction is present, run IM on all seeds passed in arg
+def greedy(g,k,p=0.1,mc=10,S=None):
     S = []
     spread = []
-    for _ in range(k):
+
+    for _ in range(k):  # k nodes of maximimum influence
         best_spread = 0
-        for j in seeds:  # Only consider nodes in seeds
+        for j in g.nodes():  # Look at nodes not yet in the set
             if j in S:
                 continue
             s = IC(g, S + [j], p, mc)
@@ -40,7 +42,6 @@ def greedy(g,k,seeds,p=0.1,mc=5000):
 def greedy_for_lt(g, seed_candidates, k=3, threshold=1):
     selected_seeds = set()
     current_spread = 0
-    if k == None: k = len(seed_candidates)  # if no restriction is present, run IM on all seeds passed in arg
     for _ in range(k):
         best_node = None
         best_spread = -1
@@ -66,7 +67,7 @@ def greedy_for_lt(g, seed_candidates, k=3, threshold=1):
 
     return selected_seeds, current_spread
 
-def LT(g, threshold, initial_active: set = None, mc=5000):
+def LT(g, threshold, initial_active: set = None, mc=10):
     # Initialize active nodes
     active = set(initial_active) if initial_active else set()
     influence_result = set(active)  # Track all influenced nodes

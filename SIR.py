@@ -45,35 +45,35 @@ def sirs_step(G, state, L, beta, gamma, mu):
     return new_state
 
 
-# def transition(L, P_prime):
+def transition(L, P_prime):
 
-#     all_0s = [i for i in range(len(L)) if L[i] == 0]
-#     all_1s = [i for i in range(len(L)) if L[i] == 1]
+    all_0s = [i for i in range(len(L)) if L[i] == 0]
+    all_1s = [i for i in range(len(L)) if L[i] == 1]
 
-#     t0 = np.random.choice(all_0s, size=P_prime)
-#     t1 = np.random.choice(all_1s, size=P_prime)
+    t0 = np.random.choice(all_0s, size=P_prime)
+    t1 = np.random.choice(all_1s, size=P_prime)
 
-#     if P_prime > 0:
-#         for i in t0:
-#             L[i] = 1
-#     elif P_prime < 0:
-#         for i in t1:
-#             L[i] = 0
+    if P_prime > 0:
+        for i in t0:
+            L[i] = 1
+    elif P_prime < 0:
+        for i in t1:
+            L[i] = 0
 
-#     return L
+    return L
 
 
-# def update_N_P(P, N, n, a=0.5, v=0.05):
+def update_N_P(P, N, n, a=0.5, v=0.05):
 
-#     X = (P - N) / n
-#     X_prime = (1 - X) * v * np.exp(a * X) - (1 + X) * v * np.exp(-a * X)  # Compute X'
+    X = (P - N) / n
+    X_prime = (1 - X) * v * np.exp(a * X) - (1 + X) * v * np.exp(-a * X)  # Compute X'
 
-#     P_prime = math.ceil((n * X_prime) / 2.0)
+    P_prime = math.ceil((n * X_prime) / 2.0)
 
-#     P = P + P_prime
-#     N = N - P_prime
+    P = P + P_prime
+    N = N - P_prime
 
-#     return P_prime, P, N
+    return P_prime, P, N
 
 #-----------
 #
@@ -126,8 +126,9 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
         N = n - 1
         P = n - N
 
-        # k: # of seeds we want
-        informed = find_seeds.initialize_social_IM(social_network=social_network,p=0.03,k=10,num_seeds=15,lt_threshold=lt_threshold)  # Create a social network, run IM on it
+        # k: k seeds with max influence
+        # informed = find_seeds.initialize_social_IM(social_network=social_network,p=0.03,k=10,num_seeds=15,lt_threshold=lt_threshold)  # Create a social network, run IM on it
+        informed = find_seeds.find_seed_set(social_network, num_seeds=3,exponent=1)
 
         # Set labels for informed set
         for node in informed:
@@ -146,7 +147,7 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
         for u in range(n):
             state_changes.append((u, state[u], 0))
 
-        # Vector with informed (1) and uninformed (0)
+        # # Vector with informed (1) and uninformed (0)
         L = [0 for _ in range(N)] + [1 for _ in range(P)]
         PList = [P]
         Inf = [len([u for u in state.keys() if state[u] == 1])]
@@ -163,6 +164,7 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
         all_infections = []
 
         for t in range(T):
+
             #--------
             #
             #  Make changes to the set of informed nodes
@@ -171,7 +173,7 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
 
             new_informed = None
             if lt_threshold == None: # If we are using I.C., that is
-                new_informed = IM.greedy(social_network, k=3, seeds=informed)[0]
+                new_informed = IM.greedy(social_network,k=3,S=informed)[0]
                 for node in new_informed:
                     informed.append(node)   
 
@@ -196,8 +198,8 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
             #--------
 
             # Dynamic updates
-            # P_prime, P, N = update_N_P(P, N, n)
-            # L = transition(L, P_prime)
+            P_prime, P, N = update_N_P(P, N, n)
+            L = transition(L, P_prime)
 
             # Make copy before modifying
             copy_state = deepcopy(state)
@@ -217,7 +219,7 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
                         quarantine_edge_removal(g=contact_network, node=u, states=state)
 
                 # if applicable (node u infected in both T(n-1) and T(n), and is informed), update quarantine status for node u
-                elif copy_state[u] == state[u] and copy_state[u] == 1 and q == True and node in informed:
+                elif copy_state[u] == state[u] and copy_state[u] == 1 and q == True and u in informed:
                     # Individual chooses, at the first step in their infection, whether they want to quarantine
                     # Add +1 to their quarantine period
                     quarantine_statuses[u] = quarantine_statuses[u] + 1
