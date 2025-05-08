@@ -9,10 +9,10 @@ n = 100
 T = 60
 Repeat = 1
 
-beta = 0.10  #infection rate
-gamma = 0.05  # recovery rate
+beta = 0.20  #infection rate
+gamma = 0.03  # recovery rate
 mu = 0.10   # immunity loss
-init = 0.05
+init = 0.1
 
 # Specify the filename
 filename = 'contact_network_text.txt'

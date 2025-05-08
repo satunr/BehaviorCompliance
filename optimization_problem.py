@@ -5,7 +5,6 @@ import correlated_graphs
 import SIR
 import numpy as np
 import py4cytoscape as p4c
-import re
 
 ping_cytoscape = False
 

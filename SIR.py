@@ -147,7 +147,7 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
         for u in range(n):
             state_changes.append((u, state[u], 0))
 
-        # # Vector with informed (1) and uninformed (0)
+        # L[i] == 0: Can't infect. L[i] == 1: Can infect
         L = [0 for _ in range(N)] + [1 for _ in range(P)]
         PList = [P]
         Inf = [len([u for u in state.keys() if state[u] == 1])]

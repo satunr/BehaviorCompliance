@@ -3,7 +3,7 @@ import random
 import networkx as nx
 
 # sim: What is used during SIR
-def IC(g, S, p, mc=10):
+def IC(g, S, p, mc=5000):
     spread = []
     for _ in range(mc):
         new_active, A = S[:], S[:]
@@ -21,7 +21,7 @@ def IC(g, S, p, mc=10):
     return np.mean(spread)
 
 # k: Number of nodes that are allowed to be informed
-def greedy(g,k,p=0.1,mc=10,S=None):
+def greedy(g,k,p=0.1,mc=5000,S=None):
     S = []
     spread = []
 
@@ -67,7 +67,7 @@ def greedy_for_lt(g, seed_candidates, k=3, threshold=1):
 
     return selected_seeds, current_spread
 
-def LT(g, threshold, initial_active: set = None, mc=10):
+def LT(g, threshold, initial_active: set = None):
     # Initialize active nodes
     active = set(initial_active) if initial_active else set()
     influence_result = set(active)  # Track all influenced nodes
