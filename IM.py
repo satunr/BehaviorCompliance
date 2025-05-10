@@ -71,10 +71,8 @@ def LT(g, threshold, initial_active: set = None):
     # Initialize active nodes
     active = set(initial_active) if initial_active else set()
     influence_result = set(active)  # Track all influenced nodes
-    new_active = True
 
-    # Iterative activation process
-    while new_active:
+    while True:
         new_active = False
         for node in g.nodes():
             if node not in influence_result:  # Not yet influenced
@@ -85,6 +83,9 @@ def LT(g, threshold, initial_active: set = None):
                 # Check if threshold is exceeded
                 if total_influence >= threshold:
                     influence_result.add(node)
-                new_active = True
+                    new_active = True
+
+        if not new_active:
+            break
 
     return influence_result
