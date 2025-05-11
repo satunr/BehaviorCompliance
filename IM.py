@@ -3,7 +3,7 @@ import random
 import networkx as nx
 
 # sim: What is used during SIR
-def IC(g, S, p, mc=5000):
+def IC(g, S, p, mc=10):
     spread = []
     for _ in range(mc):
         new_active, A = S[:], S[:]
@@ -18,10 +18,10 @@ def IC(g, S, p, mc=5000):
         A = list(set(A))
         spread.append(len(A))
 
-    return np.mean(spread)
+    return np.mean(spread), A
 
 # k: Number of nodes that are allowed to be informed
-def greedy(g,k,p=0.1,mc=5000,S=None):
+def greedy(g,k,p=0.1,mc=10,S=None):
     S = []
     spread = []
 

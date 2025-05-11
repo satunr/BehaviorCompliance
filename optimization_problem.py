@@ -6,15 +6,7 @@ import SIR
 import numpy as np
 import py4cytoscape as p4c
 
-ping_cytoscape = False
-
-# list: List of np matrices
-def binary_matrix_average(data: np.array):
-    sum_matrix = np.sum(data, axis=0)
-    avg_matrix = sum_matrix / len(data)
-
-    avg_matrix = modify_array(avg_matrix)
-    return avg_matrix
+ping_cytoscape = True
 
 # Achieves rough estimate of "average" SIR quarantine data
 def modify_array(arr: np.array):
@@ -77,19 +69,19 @@ def parse_loss_data(file_path):
 #
 #---------
 
-T = 40
+T = 50
 Repeat = 1
 
-beta = 0.10  #infection rate
+beta = 0.09  #infection rate
 gamma = 0.05  # recovery rate
 mu = 0.10   # immunity loss
-init = 0.05
+init = 0.03
 
 # Real-world network data
 # Specify the filename
-# filename = 'contact_network_text.txt'
+filename = 'contact_network_text.txt'
 # # Create the graph from the file
-# contact_graph = parse.parse(filename)
+contact_graph = parse.parse(filename)
 
 # Test on tree-like network
 # depth = 6
@@ -98,14 +90,14 @@ init = 0.05
 
 # Test on a highly-connected graph
 # Create Erdős-Rényi graph with 100 nodes and edge probability p=0.5
-contact_network = nx.erdos_renyi_graph(100, 0.2)
+# contact_network = nx.erdos_renyi_graph(100, 0.3)
 
 # Relabel nodes in parsed graph to avoid off by 1 errors in SIR.py
 # Create a mapping from old node to new node: i -> i - 1
-# mapping = {node: node - 1 for node in contact_graph.nodes()}
+mapping = {node: node - 1 for node in contact_graph.nodes()}
 
 # Relabel the nodes
-# contact_network = nx.relabel_nodes(contact_graph, mapping)
+contact_network = nx.relabel_nodes(contact_graph, mapping)
 social_network = correlated_graphs.create_w_k_hop_correlation(contact_network,k=2)[0]   # We just want the graph part of this output
 
 # Set NumPy print options to show all rows and columns data
@@ -132,12 +124,14 @@ for i in range(0,6):
     data1 = np.where(data1 != 0, 1, 0)
     data1_avg.append(data1)
 
+ic_results = SIR.Simulate_SIR(contact_network=contact_network,social_network=social_network,T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,average_data=False,q=True,allow_restoration=True,save_all=True)
+data1 = ic_results[3]
+data1 = np.array(data1, dtype=float)
+# Normalize: Set non-zero values to 1, keep zeros as 0
+data1 = np.where(data1 != 0, 1, 0)
+
 cyto_contact = ic_results[0]
 cyto_social = ic_results[5]
-
-# Take average of simulation data
-# New shape of data1_avg: array of Node x Time arrays
-data1 = binary_matrix_average(np.array(data1_avg))
 
 if ping_cytoscape == True:
     # Verify connection to Cytoscape
@@ -217,7 +211,7 @@ for i in range(2,11):
         # Apply a default visual style
         p4c.set_visual_style("default")
     
-x_vals = list(range(len(losses)))
+x_vals = [i + 2 for i in list(range(len(losses)))]
 
 # Create the bar graph
 plt.figure(figsize=(12, 6))

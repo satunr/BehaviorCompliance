@@ -171,21 +171,19 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
             #
             #-------
 
-            new_informed = None
             if lt_threshold == None: # If we are using I.C., that is
-                new_informed = IM.greedy(social_network,k=3,S=informed)[0]
-                for node in new_informed:
-                    informed.append(node)   
+                new_informed = IM.IC(social_network, informed, 0.03, mc=10)[1]
 
             else:
-                new_informed = IM.greedy_for_lt(social_network, informed, threshold=lt_threshold)[0]
-                for node in new_informed:
-                    informed.append(node) 
+                new_informed = list(IM.LT(social_network, lt_threshold, informed))
             
             # Set labels for informed set
             for node in new_informed:
                 nx.set_node_attributes(contact_network, {node: {'Informed?': 'Informed'}})
                 nx.set_node_attributes(social_network, {node: {'Informed?': 'Informed'}})
+
+            informed = informed + new_informed
+            informed = list(set(informed))  # Remove duplicates
 
             if save_all == True:
                 all_quaratines.append(quarantine_statuses.copy())
