@@ -88,4 +88,4 @@ def LT(g, threshold, initial_active: set = None):
         if not new_active:
             break
 
-    return influence_result
+    return list(influence_result)

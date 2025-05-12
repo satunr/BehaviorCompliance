@@ -175,7 +175,7 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
                 new_informed = IM.IC(social_network, informed, 0.03, mc=10)[1]
 
             else:
-                new_informed = list(IM.LT(social_network, lt_threshold, informed))
+                new_informed = IM.LT(social_network, lt_threshold, informed)
             
             # Set labels for informed set
             for node in new_informed:
