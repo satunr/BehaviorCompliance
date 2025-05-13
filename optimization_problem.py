@@ -5,9 +5,18 @@ import correlated_graphs
 import SIR
 import numpy as np
 import py4cytoscape as p4c
+from scipy.optimize import minimize  # Import scipy.optimize
+import random
+import torch
+from torch_geometric.data import Data, DataLoader
+from torch_geometric.nn import GCNConv
+import torch.nn.functional as F
+import time
+
 
 ping_cytoscape = False
 
+# Takes in list of arrays from SIR w/ I.C. simulations and returns the average array
 def average_and_normalize(arrays):    
     # Convert list of arrays to a single NumPy array and compute mean along axis 0
     try:
@@ -72,118 +81,199 @@ def parse_loss_data(file_path):
 #
 #---------
 
+
+# Parameters
 T = 100
 Repeat = 1
-
-beta = 0.09  #infection rate
-gamma = 0.07  # recovery rate
-mu = 0.11   # immunity loss
+beta = 0.09
+gamma = 0.07
+mu = 0.11
 init = 0.03
+num_graphs = 10
+tau_range = range(2, 11)
 
-# Real-world network data
+# Loss function for dataset creation
+def loss_function(tau, contact_network, results):
+    tau = int(round(float(tau)))
+    target = SIR.Simulate_SIR(
+        contact_network=contact_network, social_network=None,
+        T=T, Repeat=Repeat, beta=beta, gamma=gamma, mu=mu, init=init,
+        average_data=False, q=True, allow_restoration=True, save_all=True, lt_threshold=tau
+    )[3]
+    target = np.array(target, dtype=float)
+    target = np.where(target != 0, 1, 0)
+
+    results = np.array(results, dtype=float)
+    results = np.where(results != 0, 1, 0)
+
+    loss = np.sum(np.abs(target - results))
+    return loss
+
+# Generate dataset
+dataset = []
+for i in range(num_graphs):
+    G = nx.erdos_renyi_graph(n=random.randint(25, 100), p=random.uniform(0.1, 0.5))
+
+    edge_index = torch.tensor(list(G.edges)).t().contiguous()
+    degrees = np.array([d for _, d in G.degree()])
+    node_features = torch.FloatTensor(degrees / degrees.max()).reshape(-1, 1)
+    cur_result = SIR.Simulate_SIR(
+        contact_network=G, social_network=None, T=T, Repeat=Repeat, beta=beta, gamma=gamma, mu=mu, init=init,
+        average_data=False, q=True, allow_restoration=True, save_all=True, lt_threshold=None
+    )[3]
+    losses = []
+    for tau in tau_range:
+        loss = loss_function(tau, G, cur_result)
+        losses.append(loss)
+    optimal_tau = 2 + np.argmin(losses)
+    data = Data(x=node_features, edge_index=edge_index, y=torch.tensor([optimal_tau], dtype=torch.float))
+    dataset.append(data)
+
+# Split dataset
+train_dataset = dataset[:8]
+test_dataset = dataset[8:]
+train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False)
+
+# Define GNN model
+class GCN(torch.nn.Module):
+    def __init__(self):
+        super(GCN, self).__init__()
+        self.conv1 = GCNConv(1, 16)  # Input: 1 feature (degree), output: 16
+        self.conv2 = GCNConv(16, 16)
+        self.fc = torch.nn.Linear(16, 1)  # Output: 1 value (tau)
+
+    def forward(self, data):
+        x, edge_index = data.x, data.edge_index
+        x = F.relu(self.conv1(x, edge_index))
+        x = F.relu(self.conv2(x, edge_index))
+        x = x.mean(dim=0)  # Global mean pooling
+        x = self.fc(x)
+        return x
+
+# Initialize model, optimizer, and loss
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+model = GCN().to(device)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+criterion = torch.nn.MSELoss()
+
+# Training loop
+def train():
+    model.train()
+    total_loss = 0
+    for data in train_loader:
+        data = data.to(device)
+        optimizer.zero_grad()
+        out = model(data)
+        loss = criterion(out, data.y)
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.item()
+    return total_loss / len(train_loader)
+
+# Evaluation
+def test(loader):
+    model.eval()
+    total_loss = 0
+    with torch.no_grad():
+        for data in test_loader:
+            data = data.to(device)
+            out = model(data)
+            loss = criterion(out, data.y)
+            total_loss += loss.item()
+    return total_loss / len(loader)
+
+train_losses = []
+test_losses = []
+
+# Train for some epochs
+for epoch in range(100):
+    train_loss = train()
+    test_loss = test(test_loader)
+    train_losses.append(train_loss)
+    test_losses.append(test_loss)
+    print(f'Epoch {epoch+1}, Train Loss: {train_loss:.4f}, Test Loss: {test_loss:.4f}')
+
+# Plotting the losses
+plt.plot(train_losses, label='Train Loss')
+plt.plot(test_losses, label='Test Loss')
+plt.xlabel('Epoch')
+plt.ylabel('Loss')
+plt.title('Training and Test Loss')
+plt.legend()
+plt.show()
+
+#----------
+#
+#  Use the trained model to predict tau for a real-world graph
+#
+#----------
+
 # Specify the filename
 filename = 'contact_network_text.txt'
-# # Create the graph from the file
-contact_graph = parse.parse(filename)
 
-# Relabel nodes in parsed graph to avoid off by 1 errors in SIR.py
-# Create a mapping from old node to new node: i -> i - 1
-mapping = {node: node - 1 for node in contact_graph.nodes()}
+# Start timer
+start_time = time.time()
 
+# Create the graph from the file
+real_graph = parse.parse(filename)
 # Relabel the nodes
-contact_network = nx.relabel_nodes(contact_graph, mapping)
-social_network = correlated_graphs.create_w_k_hop_correlation(contact_network,k=2)[0]   # We just want the graph part of this output
+mapping = {node: node - 1 for node in real_graph.nodes()}
+# Relabel the nodes
+real_graph = nx.relabel_nodes(real_graph, mapping)
 
-# Set NumPy print options to show all rows and columns data
-np.set_printoptions(threshold=np.inf)
+# Use neural network to predict tau for the real graph
+real_edge_index = torch.tensor(list(real_graph.edges)).t().contiguous()
+real_degrees = np.array([d for _, d in real_graph.degree()])
+real_node_features = torch.FloatTensor(real_degrees / real_degrees.max()).reshape(-1, 1)
+real_data = Data(x=real_node_features, edge_index=real_edge_index)
+real_data = real_data.to(device)
+model.eval()
+with torch.no_grad():
+    predicted_tau = model(real_data).item()
+predicted_tau = int(round(predicted_tau))
+print(f"Predicted tau for the real graph: {predicted_tau}")
 
-#--------
-#
-#  Observed data (from I.C.)
-#
-#--------
+# End timer
+end_time = time.time()
+execution_time = end_time - start_time
+print(f"Execution time: {execution_time:.2f} seconds")
 
-data1_avg = []
-cyto_contact = None
-cyto_social = None
-ic_results = None
+# Iterative method for minimizing loss
+def iterative_loss_minimization(contact_network, results, initial_tau=2, max_iterations=10):
+    losses = []
+    for _ in range(initial_tau, max_iterations):
+        loss = loss_function(tau, contact_network, results)
+        if loss == 0:
+            break
+        losses.append(loss)
+    # Return tau that minimizes loss
+    return losses, initial_tau + np.argmin(losses)
 
-for i in range(0,7):
-    # Array of arrays of quarantine statuses
-    ic_results = SIR.Simulate_SIR(contact_network=contact_network,social_network=social_network,T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,average_data=False,q=True,allow_restoration=True,save_all=True)
+# Start timer for iterative method
+start_time_iterative = time.time()
 
-    data1 = ic_results[3]
-    data1 = np.array(data1, dtype=float)
-    # Normalize: Set non-zero values to 1, keep zeros as 0
-    data1 = np.where(data1 != 0, 1, 0)
-    data1_avg.append(data1)
+real_ic = SIR.Simulate_SIR(
+    contact_network=real_graph, social_network=None, T=T, Repeat=Repeat, beta=beta, gamma=gamma, mu=mu, init=init,
+    average_data=False, q=True, allow_restoration=True, save_all=True, lt_threshold=None
+)[3]
 
-data1 = average_and_normalize(data1_avg)
+# Use the iterative method to find tau on real graph
+iterative_results = iterative_loss_minimization(contact_network=real_graph, results=real_ic)
+losses = iterative_results[0]
+actual_tau = iterative_results[1]  
 
-cyto_contact = ic_results[0]
-cyto_social = ic_results[5]
+# End timer for iterative method
+end_time_iterative = time.time()
+execution_time_iterative = end_time_iterative - start_time_iterative
+print(f"Execution time for iterative method: {execution_time_iterative:.2f} seconds")
+print(f"Actual tau using iterative method: {actual_tau}")
 
-if ping_cytoscape == True:
-    # Verify connection to Cytoscape
-    print(p4c.cytoscape_ping())
-
-    # Export the NetworkX graph to Cytoscape
-    network1 = p4c.create_network_from_networkx(cyto_contact, collection="My Network Collection", title="Contact after I.C.")
-
-    # Apply a layout (e.g., force-directed)
-    p4c.layout_network("force-directed")
-
-    # Apply a default visual style
-    p4c.set_visual_style("default")
-
-#--------
-#
-#  Inferred data using L.T.
-#
-#--------
-
-losses = []
-for i in range(2,11):
-    # Inferred data using L.T.
-    lt_results = SIR.Simulate_SIR(contact_network=contact_network,social_network=social_network,T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,average_data=False,q=True,allow_restoration=True,save_all=True,lt_threshold=i)
-
-    data2 = lt_results[3]
-    data2 = np.array(data2, dtype=float)
-    # Normalize: Set non-zero values to 1, keep zeros as 0
-    data2 = np.where(data2 != 0, 1, 0)
-
-    # Calculate loss between observed, inferred
-    loss = np.abs(data1 - data2)
-    loss = np.sum(loss)
-    losses.append(loss)
-    print(f"loss with threshold of {i}: {loss}")
-
-    if ping_cytoscape == True:
-        cyto_contact = lt_results[0]
-        cyto_social = lt_results[5]
-
-        # Verify connection to Cytoscape
-        print(p4c.cytoscape_ping())
-
-        # Export the NetworkX graph to Cytoscape
-        network1 = p4c.create_network_from_networkx(cyto_contact, collection="My Network Collection", title=f"Contact after L.T. (Tau = {i})")
-        
-        # Apply a layout (e.g., force-directed)
-        p4c.layout_network("force-directed")
-
-        # Apply a default visual style
-        p4c.set_visual_style("default")
-    
-# Ensure graph starts at right x value
-x_vals = [i + 2 for i in list(range(len(losses)))]
-
-# Create the bar graph
-plt.figure(figsize=(12, 6))
-plt.bar(x_vals, losses, color='skyblue', edgecolor='black')
-plt.axhline(y=np.sum(data1), color='red', linestyle='--', linewidth=2, label='y = observed result')
-plt.xlabel('Threshold')
-plt.ylabel('Loss wrt # of informed')
-plt.title('Loss between average observed and inferred quarantine data')
-plt.grid(True, axis='y', linestyle='--', alpha=0.7)
-plt.tight_layout()
+x_range = [i for i in range(2, 15)]
+# Plotting the loss function
+plt.plot(x_range[:len(losses)], losses, marker='o')
+plt.xlabel('Tau')
+plt.ylabel('Loss')
+plt.title('Loss Function for Different Tau Values')
+plt.grid()
 plt.show()

@@ -4,7 +4,7 @@ import random
 import math
 import matplotlib.pyplot as plt
 import find_seeds
-# import correlated_graphs
+import correlated_graphs
 # import parse
 import IM
 
@@ -117,6 +117,9 @@ def restore_edges(g_init, g, node):
 # q: Set to true if you want quarantine periods to be factored into algorithm
 # save_all: Returns large array containing quarantine states at every time interval
 def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,average_data,q=True,allow_restoration=False,save_all=False,lt_threshold=None):
+    if social_network == None:
+        social_network = correlated_graphs.create_w_k_hop_correlation(contact_network, k=2)[0]
+
     save_contact = deepcopy(contact_network)
     save_social = deepcopy(social_network)
 
@@ -126,7 +129,7 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
         N = n - 1
         P = n - N
 
-        informed = find_seeds.find_seed_set(social_network, num_seeds=10,exponent=1)
+        informed = find_seeds.find_seed_set(social_network, num_seeds=15,exponent=1)
 
         # Set labels for informed set
         for node in informed:
