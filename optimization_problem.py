@@ -6,7 +6,7 @@ import SIR
 import numpy as np
 import py4cytoscape as p4c
 
-ping_cytoscape = True
+ping_cytoscape = False
 
 def average_and_normalize(arrays):    
     # Convert list of arrays to a single NumPy array and compute mean along axis 0
@@ -72,11 +72,11 @@ def parse_loss_data(file_path):
 #
 #---------
 
-T = 50
+T = 100
 Repeat = 1
 
-beta = 0.10  #infection rate
-gamma = 0.06  # recovery rate
+beta = 0.09  #infection rate
+gamma = 0.07  # recovery rate
 mu = 0.11   # immunity loss
 init = 0.03
 
@@ -108,7 +108,7 @@ cyto_contact = None
 cyto_social = None
 ic_results = None
 
-for i in range(0,10):
+for i in range(0,7):
     # Array of arrays of quarantine statuses
     ic_results = SIR.Simulate_SIR(contact_network=contact_network,social_network=social_network,T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,average_data=False,q=True,allow_restoration=True,save_all=True)
 
@@ -118,15 +118,10 @@ for i in range(0,10):
     data1 = np.where(data1 != 0, 1, 0)
     data1_avg.append(data1)
 
-# ic_results = SIR.Simulate_SIR(contact_network=contact_network,social_network=social_network,T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,average_data=False,q=True,allow_restoration=True,save_all=True)
-# data1 = ic_results[3]
 data1 = average_and_normalize(data1_avg)
-# data1 = np.array(data1, dtype=float)
-# Normalize: Set non-zero values to 1, keep zeros as 0
-# data1 = np.where(data1 != 0, 1, 0)
 
-cyto_contact = ic_results[0]
-cyto_social = ic_results[5]
+# cyto_contact = ic_results[0]
+# cyto_social = ic_results[5]
 
 if ping_cytoscape == True:
     # Verify connection to Cytoscape
@@ -141,11 +136,11 @@ if ping_cytoscape == True:
     # Apply a default visual style
     p4c.set_visual_style("default")
 
-#-------
+#--------
 #
 #  Inferred data using L.T.
 #
-#-------
+#--------
 
 losses = []
 for i in range(2,11):
@@ -160,7 +155,7 @@ for i in range(2,11):
     data2 = np.where(data2 != 0, 1, 0)
 
     # Calculate loss between observed, inferred
-    loss = (data1 - data2) ** 2
+    loss = np.abs(data1 - data2)
     loss = np.sum(loss)
     losses.append(loss)
     print(f"loss with threshold of {i}: {loss}")
@@ -178,6 +173,7 @@ for i in range(2,11):
         # Apply a default visual style
         p4c.set_visual_style("default")
     
+# Ensure graph starts at right x value
 x_vals = [i + 2 for i in list(range(len(losses)))]
 
 # Create the bar graph

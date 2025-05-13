@@ -126,9 +126,7 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
         N = n - 1
         P = n - N
 
-        # k: k seeds with max influence
-        # informed = find_seeds.initialize_social_IM(social_network=social_network,p=0.03,k=10,num_seeds=15,lt_threshold=lt_threshold)  # Create a social network, run IM on it
-        informed = find_seeds.find_seed_set(social_network, num_seeds=3,exponent=1)
+        informed = find_seeds.find_seed_set(social_network, num_seeds=15,exponent=1)
 
         # Set labels for informed set
         for node in informed:
