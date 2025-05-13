@@ -12,16 +12,16 @@ from copy import deepcopy
 
 # 2 ways that graphs can be saved in this code: Pinging Cytoscape via py4cytoscape, or saving a graph to gml file.
 # Change this to True if you want Cytoscape to be pinged from py4cytoscape
-ping_cytoscape = True
+ping_cytoscape = False
 
 # Change to True if you want to save to a gml file
 save_gmls = False
 
 # Change to True if you want to plot using matplotlib
-draw_inline = False
+draw_inline = True
 
 # Change to True if you want to view the comparison of our algorithm with random selection
-edge_removal_comparison = False
+edge_removal_comparison = True
 
 #------- 
 #
@@ -81,7 +81,8 @@ if ping_cytoscape == True:
     p4c.create_network_from_networkx(social_graph, collection="My NetworkX Graph", title="Initial Social")
 
 # The tuple (G, state) is stored in state_tuple variable
-state_tuple = SIR.Simulate_SIR(social_network=social_graph,contact_network=contact_graph,T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,verbose=verbose,q=q)
+state_tuple = SIR.Simulate_SIR(social_network=social_graph,contact_network=contact_graph,T=T,Repeat=Repeat,beta=beta,
+                               gamma=gamma,mu=mu,init=init,average_data=False,q=q)
 contact_graph = state_tuple[0]
 infection_statuses = state_tuple[1] # Giving these variables their own names for simplicity
 
@@ -137,10 +138,10 @@ if draw_inline == True:
 Algorithm:
 Informing_Contact(social network, contact network, seed nodes)
 
-Convinced <-- node set from running IM.py Greedy(params)
+Informed <-- node set from running IM.py Greedy(params)
 
 for i <-- 1 to n:
-    if A[i] in Convinced and B[i] in Infected:
+    if A[i] in Informed and B[i] in Infected:
         remove all of B[i]'s neighboring edges
 
 """
@@ -159,7 +160,7 @@ def Informing(k, social_network, contact_network, num_seeds):
 
     print("seeds: ", seeds)
 
-    maximization_result = IM.greedy(social_network, k, seeds)
+    maximization_result = IM.greedy(g=social_network,k=k,S=seeds)
     max_influence_nodes = maximization_result[0]
 
     print("Influence Maximization Results (Greedy Algorithm): ", max_influence_nodes)

@@ -22,7 +22,7 @@ def IC(g, S, p, mc=10):
 
 # k: Number of nodes that are allowed to be informed
 def greedy(g,k,p=0.1,mc=10,S=None):
-    S = []
+    if S == None: S = []
     spread = []
 
     for _ in range(k):  # k nodes of maximimum influence
@@ -30,7 +30,7 @@ def greedy(g,k,p=0.1,mc=10,S=None):
         for j in g.nodes():  # Look at nodes not yet in the set
             if j in S:
                 continue
-            s = IC(g, S + [j], p, mc)
+            s = IC(g, S + [j], p, mc)[0]
             if s > best_spread:
                 best_spread, node = s, j
         S.append(node)

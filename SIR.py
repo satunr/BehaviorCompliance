@@ -126,7 +126,7 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
         N = n - 1
         P = n - N
 
-        informed = find_seeds.find_seed_set(social_network, num_seeds=15,exponent=1)
+        informed = find_seeds.find_seed_set(social_network, num_seeds=10,exponent=1)
 
         # Set labels for informed set
         for node in informed:

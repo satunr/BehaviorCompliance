@@ -120,8 +120,8 @@ for i in range(0,7):
 
 data1 = average_and_normalize(data1_avg)
 
-# cyto_contact = ic_results[0]
-# cyto_social = ic_results[5]
+cyto_contact = ic_results[0]
+cyto_social = ic_results[5]
 
 if ping_cytoscape == True:
     # Verify connection to Cytoscape
@@ -146,8 +146,6 @@ losses = []
 for i in range(2,11):
     # Inferred data using L.T.
     lt_results = SIR.Simulate_SIR(contact_network=contact_network,social_network=social_network,T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,average_data=False,q=True,allow_restoration=True,save_all=True,lt_threshold=i)
-    cyto_contact = lt_results[0]
-    cyto_social = lt_results[5]
 
     data2 = lt_results[3]
     data2 = np.array(data2, dtype=float)
@@ -161,12 +159,15 @@ for i in range(2,11):
     print(f"loss with threshold of {i}: {loss}")
 
     if ping_cytoscape == True:
+        cyto_contact = lt_results[0]
+        cyto_social = lt_results[5]
+
         # Verify connection to Cytoscape
         print(p4c.cytoscape_ping())
 
         # Export the NetworkX graph to Cytoscape
         network1 = p4c.create_network_from_networkx(cyto_contact, collection="My Network Collection", title=f"Contact after L.T. (Tau = {i})")
-
+        
         # Apply a layout (e.g., force-directed)
         p4c.layout_network("force-directed")
 
