@@ -84,7 +84,7 @@ def parse_loss_data(file_path):
 
 # Parameters
 T = 100
-Repeat = 1
+Repeat = 8
 beta = 0.09
 gamma = 0.07
 mu = 0.11
@@ -117,6 +117,7 @@ for i in range(num_graphs):
     edge_index = torch.tensor(list(G.edges)).t().contiguous()
     degrees = np.array([d for _, d in G.degree()])
     node_features = torch.FloatTensor(degrees / degrees.max()).reshape(-1, 1)
+    # Simulate SIR w/ I.C. model on the graph
     cur_result = SIR.Simulate_SIR(
         contact_network=G, social_network=None, T=T, Repeat=Repeat, beta=beta, gamma=gamma, mu=mu, init=init,
         average_data=False, q=True, allow_restoration=True, save_all=True, lt_threshold=None
@@ -135,7 +136,12 @@ test_dataset = dataset[8:]
 train_loader = DataLoader(train_dataset, batch_size=2, shuffle=True)
 test_loader = DataLoader(test_dataset, batch_size=2, shuffle=False)
 
-# Define GNN model
+#----------
+#
+#  Define GNN model
+#
+#----------
+
 class GCN(torch.nn.Module):
     def __init__(self):
         super(GCN, self).__init__()
@@ -205,7 +211,7 @@ plt.show()
 
 #----------
 #
-#  Use the trained model to predict tau for a real-world graph
+#  Use Case: Predict tau for a real-world graph
 #
 #----------
 
@@ -221,6 +227,12 @@ real_graph = parse.parse(filename)
 mapping = {node: node - 1 for node in real_graph.nodes()}
 # Relabel the nodes
 real_graph = nx.relabel_nodes(real_graph, mapping)
+
+#----------
+#
+#  Use the trained model to predict tau for a real-world graph
+#
+#----------
 
 # Use neural network to predict tau for the real graph
 real_edge_index = torch.tensor(list(real_graph.edges)).t().contiguous()
@@ -239,6 +251,12 @@ end_time = time.time()
 execution_time = end_time - start_time
 print(f"Execution time: {execution_time:.2f} seconds")
 
+#----------
+#
+#  Find true tau that minimizes loss using iterative method
+#
+#----------
+
 # Iterative method for minimizing loss
 def iterative_loss_minimization(contact_network, results, initial_tau=2, max_iterations=10):
     losses = []
@@ -253,10 +271,16 @@ def iterative_loss_minimization(contact_network, results, initial_tau=2, max_ite
 # Start timer for iterative method
 start_time_iterative = time.time()
 
-real_ic = SIR.Simulate_SIR(
-    contact_network=real_graph, social_network=None, T=T, Repeat=Repeat, beta=beta, gamma=gamma, mu=mu, init=init,
-    average_data=False, q=True, allow_restoration=True, save_all=True, lt_threshold=None
-)[3]
+avg_ic_results = []
+print("Running I.C. average simulation on real graph...")
+for i in range(Repeat):
+# Simulate SIR model on the real graph
+    real_ic = SIR.Simulate_SIR(
+        contact_network=real_graph, social_network=None, T=T, Repeat=Repeat, beta=beta, gamma=gamma, mu=mu, init=init,
+        average_data=False, q=True, allow_restoration=True, save_all=True, lt_threshold=None
+    )[3]
+    avg_ic_results.append(real_ic)
+real_ic = average_and_normalize(avg_ic_results)
 
 # Use the iterative method to find tau on real graph
 iterative_results = iterative_loss_minimization(contact_network=real_graph, results=real_ic)

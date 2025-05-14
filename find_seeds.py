@@ -13,9 +13,13 @@ def find_seed_set(g, num_seeds, exponent=1):
 
     # Calculate probabilities
     nodes = list(degrees.keys())
-    probs = [(degrees[node] ** exponent) for node in nodes]
+    epsilon = 1e-6  # tiny bump to prevent 0 probabilities
+    probs = [(degrees[node] ** exponent) + epsilon for node in nodes]
     total = sum(probs)
     probs = [p / total for p in probs]
+
+    if np.count_nonzero(probs) < num_seeds:
+        raise ValueError(f"Cannot choose {num_seeds} seeds — only {np.count_nonzero(probs)} nodes have non-zero probability.")
 
     # Create the initial seed set
     seed_set = list(np.random.choice(nodes, size=num_seeds, replace=False, p=probs))
