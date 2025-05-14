@@ -120,9 +120,6 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
     if social_network == None:
         social_network = correlated_graphs.create_w_k_hop_correlation(contact_network, k=2)[0]
 
-    save_contact = deepcopy(contact_network)
-    save_social = deepcopy(social_network)
-
     n = len(contact_network.nodes())
     All_Init = {t: [] for t in range(T + 1)}
     for _ in range(Repeat):
@@ -260,15 +257,8 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
             plt.tight_layout()
             plt.savefig('Information.png')
             plt.show()
-    
-    temp_contact = deepcopy(contact_network)
-    temp_social = deepcopy(social_network)
-
-    # Revert network changes
-    contact_network = save_contact
-    social_network = save_social
 
     # Return the graph and the list of state change tuples, and all quarantine statuses (if applicable)
     if save_all == True:
-        return temp_contact, state_changes, infection_data, all_quaratines, all_infections, temp_social
-    return temp_contact, state_changes, infection_data
+        return contact_network, state_changes, infection_data, all_quaratines, all_infections, social_network
+    return contact_network, state_changes, infection_data

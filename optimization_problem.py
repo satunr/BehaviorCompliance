@@ -12,6 +12,7 @@ from torch_geometric.data import Data, DataLoader
 from torch_geometric.nn import GCNConv
 import torch.nn.functional as F
 import time
+from copy import deepcopy
 
 
 ping_cytoscape = False
@@ -89,14 +90,14 @@ beta = 0.09
 gamma = 0.07
 mu = 0.11
 init = 0.03
-num_graphs = 10
+num_graphs = 100
 tau_range = range(2, 11)
 
 # Loss function for dataset creation
 def loss_function(tau, contact_network, results):
     tau = int(round(float(tau)))
     target = SIR.Simulate_SIR(
-        contact_network=contact_network, social_network=None,
+        contact_network=deepcopy(contact_network), social_network=None,
         T=T, Repeat=Repeat, beta=beta, gamma=gamma, mu=mu, init=init,
         average_data=False, q=True, allow_restoration=True, save_all=True, lt_threshold=tau
     )[3]
@@ -119,7 +120,7 @@ for i in range(num_graphs):
     node_features = torch.FloatTensor(degrees / degrees.max()).reshape(-1, 1)
     # Simulate SIR w/ I.C. model on the graph
     cur_result = SIR.Simulate_SIR(
-        contact_network=G, social_network=None, T=T, Repeat=Repeat, beta=beta, gamma=gamma, mu=mu, init=init,
+        contact_network=deepcopy(G), social_network=None, T=T, Repeat=Repeat, beta=beta, gamma=gamma, mu=mu, init=init,
         average_data=False, q=True, allow_restoration=True, save_all=True, lt_threshold=None
     )[3]
     losses = []
@@ -276,7 +277,7 @@ print("Running I.C. average simulation on real graph...")
 for i in range(Repeat):
 # Simulate SIR model on the real graph
     real_ic = SIR.Simulate_SIR(
-        contact_network=real_graph, social_network=None, T=T, Repeat=Repeat, beta=beta, gamma=gamma, mu=mu, init=init,
+        contact_network=deepcopy(real_graph), social_network=None, T=T, Repeat=Repeat, beta=beta, gamma=gamma, mu=mu, init=init,
         average_data=False, q=True, allow_restoration=True, save_all=True, lt_threshold=None
     )[3]
     avg_ic_results.append(real_ic)
