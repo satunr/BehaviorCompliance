@@ -155,12 +155,13 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
         # Take abs. value of the samples, and round to nearest int. val.
         d = [abs(round(x)) for x in samples_array]
 
-        # This will hold sums: +1 to ith element if node i is infected 1 at both T(n-1) and T(n)
+        # Holds dynamic quarantine lengths
         quarantine_statuses = [0 for _ in range(0, n)]
 
         all_quaratines = []
         all_infections = []
 
+        quarantine_prob_matrix = np.zeros((T, n)) # T x n matrix: hold probabilities of quarantine for each node at each time step
         for t in range(T):
 
             #--------
@@ -170,10 +171,19 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
             #-------
 
             if lt_threshold == None: # If we are using I.C., that is
-                new_informed = IM.IC(social_network, informed, 0.03, mc=10)[1]
+                ic_results = IM.IC_prob_matrix(social_network, S=informed, p=0.03, mc=10, quarantining=quarantine_statuses)
+                prob_matrix = ic_results[0]
+                new_informed = ic_results[1]
+
+                quarantine_prob_matrix[t] = prob_matrix
+
 
             else:
-                new_informed = IM.LT(social_network, lt_threshold, informed)
+                lt_results = IM.lt_prob_matrix(social_network, threshold=lt_threshold, S=informed, quarantining=quarantine_statuses)
+                prob_matrix = lt_results[0]
+                new_informed = lt_results[1]
+
+                quarantine_prob_matrix[t] = prob_matrix
             
             # Set labels for informed set
             for node in new_informed:
@@ -260,5 +270,5 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
 
     # Return the graph and the list of state change tuples, and all quarantine statuses (if applicable)
     if save_all == True:
-        return contact_network, state_changes, infection_data, all_quaratines, all_infections, social_network
+        return contact_network, state_changes, infection_data, quarantine_prob_matrix, all_infections, social_network
     return contact_network, state_changes, infection_data
