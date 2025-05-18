@@ -7,7 +7,7 @@ import numpy as np
 import py4cytoscape as p4c
 from copy import deepcopy
 
-ping_cytoscape = False
+ping_cytoscape = True
 
 # Lazy way of parsing the loss data from the HPC, if used
 def parse_loss_data(file_path):
@@ -42,18 +42,17 @@ def parse_loss_data(file_path):
 #  Optimization problem: Minimize loss between I.C., L.T. models, 
 #    to arrive at a deterministic construction of unknown social network
 #    Assumption: Threshold value is the same for all nodes
-#    f: Z -> Z, and we want f(X*) approx A in Z, where A is the observed I.C. results
+#    f: Z -> R, and we want f(X*) approx A, where A is the observed I.C. results
 #      Learnable parameter: Tau - Threshold for L.T. simulation.
 #
 #---------
 
-T = 100
+T = 50
 Repeat = 1
-
-beta = 0.09  #infection rate
-gamma = 0.07  # recovery rate
-mu = 0.11   # immunity loss
-init = 0.03
+beta = 0.15  #infection rate
+gamma = 0.05  # recovery rate
+mu = 0.10   # immunity loss
+init = 0.3  # initial fraction of infected nodes
 
 # Real-world network data
 # Specify the filename
@@ -92,7 +91,7 @@ if ping_cytoscape == True:
     print(p4c.cytoscape_ping())
 
     # Export the NetworkX graph to Cytoscape
-    network1 = p4c.create_network_from_networkx(cyto_contact, collection="My Network Collection", title=f"Contact after I.C. (run # {i})")
+    network1 = p4c.create_network_from_networkx(cyto_contact, collection="My Network Collection", title=f"Contact after I.C.")
 
     # Apply a layout (e.g., force-directed)
     p4c.layout_network("force-directed")
@@ -116,12 +115,13 @@ for i in range(0,11):
 
     # Calculate loss between observed, inferred
     loss = np.abs(data1 - data2)
-    loss = np.sum(loss)
+    loss = np.sum(loss) # Sum over times and nodes
+    loss = np.round(loss, 2)
     losses.append(loss)
     print(f"loss with threshold of {i}: {loss}")
 
     if ping_cytoscape == True:
-        cyto_contact = lt_results[0]
+        cyto_contact = correlated_graphs.generate_from_prob_matrix(lt_results[0]) # Adds probabilistic edge weight attributes
         cyto_social = lt_results[5]
 
         # Verify connection to Cytoscape
@@ -142,7 +142,6 @@ x_vals = [i for i in list(range(len(losses)))]
 # Create the bar graph
 plt.figure(figsize=(12, 6))
 plt.bar(x_vals, losses, color='skyblue', edgecolor='black')
-plt.axhline(y=np.sum(data1), color='red', linestyle='--', linewidth=2, label='y = observed result')
 plt.xlabel('Threshold')
 plt.ylabel('Loss wrt # of informed')
 plt.title('Loss between average observed and inferred quarantine data')

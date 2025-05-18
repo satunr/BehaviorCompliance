@@ -17,33 +17,6 @@ from copy import deepcopy
 
 ping_cytoscape = False
 
-# Takes in list of arrays from SIR w/ I.C. simulations and returns the average array
-def average_and_normalize(arrays):    
-    # Convert list of arrays to a single NumPy array and compute mean along axis 0
-    try:
-        stacked = np.stack(arrays)
-    except ValueError:
-        raise ValueError("All arrays must have the same shape")
-    
-    avg = np.mean(stacked, axis=0)
-    
-    # Find the two smallest values (unique values)
-    flat_avg = avg.flatten()
-    unique_vals = np.unique(flat_avg)
-    if len(unique_vals) < 2:
-        return "Not enough unique values to determine average simulation"
-    else:
-        smallest_vals = np.sort(unique_vals)[:2]  # Take the two smallest
-    
-    # Set all instances of the two smallest values to 0
-    for val in smallest_vals:
-        avg[avg == val] = 0
-    
-    # Normalize: 0 -> 0, non-zero -> 1
-    normalized = np.where(avg != 0, 1, 0)
-    
-    return normalized
-
 # Lazy way of parsing the loss data from the HPC, if used
 def parse_loss_data(file_path):
     thresholds = []

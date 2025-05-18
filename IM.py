@@ -7,7 +7,7 @@ import networkx as nx
 # p: Probability of activation
 # mc: Number of Monte Carlo simulations
 # quarantining: List of nodes currently quarantining
-def IC_prob_matrix(g, S, p, mc=10, quarantining=None):
+def IC_prob_matrix(g, S, p, mc=5000, quarantining=None):
     quarantine_list = []
     for _ in range(mc):
         A = S[:]
@@ -23,8 +23,8 @@ def IC_prob_matrix(g, S, p, mc=10, quarantining=None):
         # Create informed matrix of size len(g.nodes()) x 1
         one_run = np.zeros((1, len(g.nodes())))
         for node in A:
-            if node in quarantining:
-                one_run[0][node] = 1
+            # if node in quarantining:
+            one_run[0][node] = 1
         quarantine_list.append(one_run)
 
     quarantine_matrix = np.array(quarantine_list)
@@ -80,8 +80,8 @@ def lt_prob_matrix(g, S, threshold=1, quarantining=None):
                 A.append(node)
 
     for node in A:
-        if node in quarantining:
-            quarantine_matrix[0][node] = 1
+        # if node in quarantining:
+        quarantine_matrix[0][node] = 1
 
     return quarantine_matrix, A  # Return the average probability matrix and the final set of informed nodes
 

@@ -163,3 +163,20 @@ if k_hop_simulation == True:
 
     plt.tight_layout()
     plt.show()
+
+# prob matrix: 1 x n
+def generate_from_prob_matrix(prob_matrix):
+    """
+    Generates a directed graph from a given probability matrix, and assigns edge weight attributes as probabilities.
+    prob_matrix: 2D numpy array where each entry (i, j) represents the probability of an edge from i to j
+    """
+    num_nodes = prob_matrix.shape[0]
+    G = nx.DiGraph()
+
+    # Assign weights to edges based on the probability matrix
+    for i in range(num_nodes):
+        for j in G.neighbors(i):
+            G[i][j]['weight'] = prob_matrix[0][i]
+    
+    return G
+
