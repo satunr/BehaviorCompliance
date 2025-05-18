@@ -23,10 +23,7 @@ mapping = {node: node - 1 for node in contact_graph.nodes()}
 # Relabel the nodes
 contact_network = nx.relabel_nodes(contact_graph, mapping)
 social_network = correlated_graphs.create_w_k_hop_correlation(contact_network,k=2)[0]   # We just want the graph part of this output
-copy_social_network = deepcopy(social_network)
 
-# Set NumPy print options to show all rows and columns data
-np.set_printoptions(threshold=np.inf)
 
 #--------
 #
@@ -38,12 +35,12 @@ cyto_contact = None
 cyto_social = None
 ic_results = None
 
-T = 3
+T = 50
 informed = find_seeds.find_seed_set(social_network, num_seeds=10, exponent=1)
 ic_matrix = np.zeros((T, len(social_network.nodes())))
 
 for i in range(0, T):
-    cur_ic_results = IM.IC_prob_matrix(g=social_network, S=informed, p=0.03)
+    cur_ic_results = IM.IC_prob_matrix(g=social_network, S=informed, p=0.03, mc=10)  # No changes made to network; no deepcopy needed
     ic_matrix[i] = cur_ic_results[0] # Fill out the quarantine probability matrix
     informed = informed + cur_ic_results[1]  # Update the informed set
 
@@ -69,16 +66,18 @@ if ping_cytoscape == True:
 #
 #--------
 
+seeds = find_seeds.find_seed_set(social_network, num_seeds=10, exponent=1)
 losses = []
-for i in range(0,11):
-    social_network = copy_social_network
+for i in range(0,11):  # Vary threshold parameter
+    informed = seeds[:]  # Reset informed set for each threshold
     lt_matrix = np.zeros((T, len(social_network.nodes())))
 
     for j in range(0, T):
+
         # Inferred data using L.T.
-        cur_lt_results = IM.lt_prob_matrix(g=deepcopy(social_network), S=informed, threshold=i)
+        cur_lt_results = IM.lt_prob_matrix(g=social_network, S=informed, threshold=i)
         lt_matrix[j] = cur_lt_results[0]  # Fill out the quarantine probability matrix
-        informed = informed + cur_lt_results[1]  # Update the informed set
+        informed = list(set(informed + cur_lt_results[1]))  # Update the informed set
 
     # Calculate loss between observed, inferred
     loss = np.abs(ic_matrix - lt_matrix)
