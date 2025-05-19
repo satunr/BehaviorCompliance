@@ -6,13 +6,15 @@ from copy import deepcopy
 
 k_hop_simulation = False
 
-def create_correlated_digraph(base_graph, correlation_factor, base_probability=0.01, num_nodes=100):
+def create_correlated_digraph(base_graph, correlation_factor, base_probability=0.01):
     """
     Creates a directed graph A where edge existence correlates with 
     an undirected base graph B, with better sparsity control
     correlation_factor: float between 0 and 1, controls correlation strength
     base_probability: float between 0 and 1, controls overall density
     """
+    num_nodes = len(base_graph.nodes()) 
+
     # Create empty directed graph A
     A = nx.DiGraph()
     A.add_nodes_from(range(num_nodes))
