@@ -73,7 +73,7 @@ def lt_prob_matrix(g, S, threshold=1, quarantining=None):
     if S == []: raise ValueError("S cannot be empty")
 
     A = S[:]
-    quarantine_matrix = np.zeros((1, len(g.nodes())))
+    quarantine_vector = np.zeros((1, len(g.nodes())))
 
     for node in g.nodes():
         if node not in A:  # Not yet informed
@@ -85,9 +85,9 @@ def lt_prob_matrix(g, S, threshold=1, quarantining=None):
 
     for node in A:
         # if node in quarantining:
-        quarantine_matrix[0][node] = 1
+        quarantine_vector[0][node] = 1
 
-    return quarantine_matrix, A  # Return the average probability matrix and the final set of informed nodes
+    return quarantine_vector[0], A  # Return the average probability matrix and the final set of informed nodes
 
 # k: # of seeds nodes that can be chosen to inform
 def greedy_for_lt(g, seed_candidates, k=3, threshold=1):

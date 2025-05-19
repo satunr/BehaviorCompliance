@@ -7,8 +7,9 @@ import find_seeds
 import numpy as np
 import py4cytoscape as p4c
 from copy import deepcopy
+from sklearn.metrics import mean_squared_error
 
-ping_cytoscape = True
+ping_cytoscape = False
 
 # Real-world network data
 # Specify the filename
@@ -35,7 +36,7 @@ cyto_contact = None
 cyto_social = None
 ic_results = None
 
-T = 50
+T = 100
 informed = find_seeds.find_seed_set(social_network, num_seeds=10, exponent=1)
 ic_matrix = np.zeros((T, len(social_network.nodes())))
 
@@ -47,20 +48,20 @@ for i in range(0, T):
 for node in informed:
     nx.set_node_attributes(social_network, {node: 'Informed'}, 'Informed?')
 
-if ping_cytoscape == True:
-    cyto_social = correlated_graphs.generate_from_prob_matrix(social_network, ic_matrix[T-1]) # Adds probabilistic edge weight attributes
+# if ping_cytoscape == True:
+#     cyto_social = correlated_graphs.generate_from_prob_matrix(social_network, ic_matrix[T-1]) # Adds probabilistic edge weight attributes
 
-    # Verify connection to Cytoscape
-    print(p4c.cytoscape_ping())
+#     # Verify connection to Cytoscape
+#     print(p4c.cytoscape_ping())
 
-    # Export the NetworkX graph to Cytoscape
-    network1 = p4c.create_network_from_networkx(cyto_social, collection="My Network Collection", title=f"Social after I.C.")
+#     # Export the NetworkX graph to Cytoscape
+#     network1 = p4c.create_network_from_networkx(cyto_social, collection="My Network Collection", title=f"Social after I.C.")
 
-    # Apply a layout (e.g., force-directed)
-    p4c.layout_network("force-directed")
+#     # Apply a layout (e.g., force-directed)
+#     p4c.layout_network("force-directed")
 
-    # Apply a default visual style
-    p4c.set_visual_style("default")
+#     # Apply a default visual style
+#     p4c.set_visual_style("default")
 
 
 #--------
@@ -73,42 +74,35 @@ seeds = find_seeds.find_seed_set(social_network, num_seeds=10, exponent=1)
 losses = []
 for i in range(0,11):  # Vary threshold parameter
     informed = seeds[:]  # Reset informed set for each threshold
-    lt_matrix = np.zeros((T, len(social_network.nodes())))
+    # loss_matrix = np.zeros((T, 1))
 
     for j in range(0, T):
         # Inferred data using L.T.
         cur_lt_results = IM.lt_prob_matrix(g=social_network, S=informed, threshold=i)
-        lt_matrix[j] = cur_lt_results[0]  # Fill out the quarantine probability matrix
         informed = list(set(informed + cur_lt_results[1]))  # Update the informed set
-    
+
+    losses.append(mean_squared_error(ic_matrix[T-1], cur_lt_results[0])) # Calculate loss of final results of I.C., L.T.
+
     for node in informed:
         nx.set_node_attributes(social_network, {node: 'Informed'}, 'Informed?')
-    print("Length of informed: ", len(informed))
 
-    # Calculate loss between observed, inferred
-    loss = np.abs(ic_matrix - lt_matrix)
-    loss = np.sum(loss) # Sum over times and nodes
-    loss = np.round(loss, 2)
-    losses.append(loss)
 
-    print(f"loss with threshold of {i}: {loss}")
+    # if ping_cytoscape == True:
+    #     cyto_social_lt = correlated_graphs.generate_from_prob_matrix(social_network, lt_matrix[T-1]) # Adds probabilistic edge weight attributes
 
-    if ping_cytoscape == True:
-        cyto_social_lt = correlated_graphs.generate_from_prob_matrix(social_network, lt_matrix[T-1]) # Adds probabilistic edge weight attributes
+    #     # Verify connection to Cytoscape
+    #     print(p4c.cytoscape_ping())
 
-        # Verify connection to Cytoscape
-        print(p4c.cytoscape_ping())
-
-        # Export the NetworkX graph to Cytoscape
-        network1 = p4c.create_network_from_networkx(cyto_social_lt, collection="My Network Collection", title=f"Social after L.T. (Tau = {i})")
+    #     # Export the NetworkX graph to Cytoscape
+    #     network1 = p4c.create_network_from_networkx(cyto_social_lt, collection="My Network Collection", title=f"Social after L.T. (Tau = {i})")
         
-        # Apply a layout (e.g., force-directed)
-        p4c.layout_network("force-directed")
+    #     # Apply a layout (e.g., force-directed)
+    #     p4c.layout_network("force-directed")
 
-        # Apply a default visual style
-        p4c.set_visual_style("default")
+    #     # Apply a default visual style
+    #     p4c.set_visual_style("default")
     
-# Ensure graph starts at right x value
+# # Ensure graph starts at right x value
 x_vals = [i for i in list(range(len(losses)))]
 
 # Create the bar graph
