@@ -8,7 +8,7 @@ import networkx as nx
 # mc: Number of Monte Carlo simulations
 # quarantining: List of nodes currently quarantining
 def IC_prob_matrix(g, S, p, mc=5000, quarantining=None):
-    if S == []: ValueError("S cannot be empty")
+    if S == []: raise ValueError("S cannot be empty")
 
     quarantine_list = []
     for _ in range(mc):
@@ -70,7 +70,7 @@ def greedy(g,k,p=0.1,mc=10,S=None):
     return S, spread
 
 def lt_prob_matrix(g, S, threshold=1, quarantining=None):
-    if S == []: ValueError("S cannot be empty")
+    if S == []: raise ValueError("S cannot be empty")
 
     A = S[:]
     quarantine_matrix = np.zeros((1, len(g.nodes())))

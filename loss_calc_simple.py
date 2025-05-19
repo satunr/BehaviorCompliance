@@ -8,7 +8,7 @@ import numpy as np
 import py4cytoscape as p4c
 from copy import deepcopy
 
-ping_cytoscape = False
+ping_cytoscape = True
 
 # Real-world network data
 # Specify the filename
@@ -44,14 +44,17 @@ for i in range(0, T):
     ic_matrix[i] = cur_ic_results[0] # Fill out the quarantine probability matrix
     informed = informed + cur_ic_results[1]  # Update the informed set
 
+for node in informed:
+    nx.set_node_attributes(social_network, {node: 'Informed'}, 'Informed?')
+
 if ping_cytoscape == True:
-    cyto_social = correlated_graphs.generate_from_prob_matrix(ic_matrix) # Adds probabilistic edge weight attributes
+    cyto_social = correlated_graphs.generate_from_prob_matrix(social_network, ic_matrix[T-1]) # Adds probabilistic edge weight attributes
 
     # Verify connection to Cytoscape
     print(p4c.cytoscape_ping())
 
     # Export the NetworkX graph to Cytoscape
-    network1 = p4c.create_network_from_networkx(cyto_contact, collection="My Network Collection", title=f"Contact after I.C.")
+    network1 = p4c.create_network_from_networkx(cyto_social, collection="My Network Collection", title=f"Social after I.C.")
 
     # Apply a layout (e.g., force-directed)
     p4c.layout_network("force-directed")
@@ -73,11 +76,14 @@ for i in range(0,11):  # Vary threshold parameter
     lt_matrix = np.zeros((T, len(social_network.nodes())))
 
     for j in range(0, T):
-
         # Inferred data using L.T.
         cur_lt_results = IM.lt_prob_matrix(g=social_network, S=informed, threshold=i)
         lt_matrix[j] = cur_lt_results[0]  # Fill out the quarantine probability matrix
         informed = list(set(informed + cur_lt_results[1]))  # Update the informed set
+    
+    for node in informed:
+        nx.set_node_attributes(social_network, {node: 'Informed'}, 'Informed?')
+    print("Length of informed: ", len(informed))
 
     # Calculate loss between observed, inferred
     loss = np.abs(ic_matrix - lt_matrix)
@@ -88,13 +94,13 @@ for i in range(0,11):  # Vary threshold parameter
     print(f"loss with threshold of {i}: {loss}")
 
     if ping_cytoscape == True:
-        cyto_social = correlated_graphs.generate_from_prob_matrix(lt_matrix) # Adds probabilistic edge weight attributes
+        cyto_social_lt = correlated_graphs.generate_from_prob_matrix(social_network, lt_matrix[T-1]) # Adds probabilistic edge weight attributes
 
         # Verify connection to Cytoscape
         print(p4c.cytoscape_ping())
 
         # Export the NetworkX graph to Cytoscape
-        network1 = p4c.create_network_from_networkx(cyto_social, collection="My Network Collection", title=f"Social after L.T. (Tau = {i})")
+        network1 = p4c.create_network_from_networkx(cyto_social_lt, collection="My Network Collection", title=f"Social after L.T. (Tau = {i})")
         
         # Apply a layout (e.g., force-directed)
         p4c.layout_network("force-directed")
