@@ -129,21 +129,22 @@ def calculate_loss(social_network, plot=False):
 data = [correlated_graphs.create_w_k_hop_correlation(social_graph, k=1)[0] for _ in range(10)]
 # Process each graph: remove a node and relabel nodes for continuity
 for item in data:
-    # Get the list of nodes
-    nodes = list(item.nodes())
-    # Choose a random node to remove
-    node_to_remove = random.choice(nodes)
-    # Remove the node
-    item.remove_node(node_to_remove)
-    # Create a mapping to relabel nodes
-    mapping = {}
-    for node in item.nodes():
-        if node > node_to_remove:
-            mapping[node] = node - 1  # Decrement labels above the removed node
-        else:
-            mapping[node] = node  # Keep labels below unchanged
-    # Relabel the nodes
-    nx.relabel_nodes(item, mapping, copy=False)  # In-place relabeling
+    for _ in range(0, random.randint(1, 11)):
+        # Get the list of nodes
+        nodes = list(item.nodes())
+        # Choose a random node to remove
+        node_to_remove = random.choice(nodes)
+        # Remove the node
+        item.remove_node(node_to_remove)
+        # Create a mapping to relabel nodes
+        mapping = {}
+        for node in item.nodes():
+            if node > node_to_remove:
+                mapping[node] = node - 1  # Decrement labels above the removed node
+            else:
+                mapping[node] = node  # Keep labels below unchanged
+        # Relabel the nodes
+        nx.relabel_nodes(item, mapping, copy=False)  # In-place relabeling
 # Pack the data as a tuple of (losses, connectivity of the graph)
 results = [(calculate_loss(graph), round(np.mean([graph.out_degree(node) for node in graph]), 1)) for graph in data]
 # Print the results
