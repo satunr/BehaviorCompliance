@@ -4,19 +4,21 @@ import networkx as nx
 
 # Returns probability matrix of node i being informed
 # S: Nodes that are already informed
-# p: Probability of activation
+# p: Probability of activation (can be a scalar or a vector)
 # mc: Number of Monte Carlo simulations
 # quarantining: List of nodes currently quarantining
 def IC_prob_matrix(g, S, p, mc=5000, quarantining=None):
     if S == []: raise ValueError("S cannot be empty")
-
     quarantine_list = []
+    
     for _ in range(mc):
         A = S[:]
         new_ones = []
         for node in S:
             out_neighbors = list(g.successors(node))
-            success = [u for u in out_neighbors if random.uniform(0, 1) < p]
+            # Activation probability is uniform if a scalar is given, otherwise use the node's specific probability
+            if isinstance(p, float): success = [u for u in out_neighbors if random.uniform(0, 1) < p]  
+            elif isinstance(p, np.ndarray): success = [u for u in out_neighbors if random.uniform(0, 1) < p[0][u]]
             new_ones += success
         new_active = list(set(new_ones) - set(A))
         A += new_active
@@ -139,3 +141,4 @@ def LT(g, threshold, initial_active: set = None):
                     new_ones = True
 
     return list(influence_result)
+

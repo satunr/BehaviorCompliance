@@ -122,17 +122,14 @@ def misinformation_update(g, informed, quarantining, misinformation_prob, quaran
             # Add new edges to the node to spread misinformation ~ N. dist.
             for _ in range(0, round(np.random.normal(5, 2))):
                 # Get list of nodes that are not current neighbors
-                non_neighbors = [n for n in g.nodes() if n != node and n not in g.neighbors(node)]
+                non_neighbors = [n for n in g.nodes() if n != node and n not in g.neighbors(node) and quarantining[n] == 0]
                 # Only add edge if there are non-neighbor nodes available
                 if non_neighbors != []:
-                    no_edge = True
-                    while no_edge == True:
-                        # Randomly select a non-neighbor to connect to
-                        neighbor = random.choice(non_neighbors)
-                        # Ensure the neighbor is not quarantining
-                        if quarantining[neighbor] == 0:
-                            g.add_edge(node, neighbor)
-                            no_edge = False
+                    # Randomly select a non-neighbor to connect to
+                    neighbor = random.choice(non_neighbors)
+                    # Ensure the neighbor is not quarantining
+                    if quarantining[neighbor] == 0:
+                        g.add_edge(node, neighbor)
 
     return misinformed, quarantine_required
 
@@ -200,8 +197,11 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
 
         quarantine_prob_matrix = np.zeros((T, n)) # T x n matrix: hold probabilities of quarantine for each node at each time step
         
-        # Store misinformed nodes (if applicable)
         misinformed = []
+        if misinformation_prob: 
+            misinformed = misinformation_update(contact_network, informed=informed, quarantining=quarantine_statuses,
+                                            misinformation_prob=misinformation_prob, quarantine_required=d)[0]
+
         for t in range(T):
 
             #--------
@@ -211,7 +211,7 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
             #-------
 
             if lt_threshold == None: # If we are using I.C., that is
-                ic_results = IM.IC_prob_matrix(social_network, S=informed, p=0.03, mc=10, quarantining=quarantine_statuses)
+                ic_results = IM.IC_prob_matrix(social_network, S=informed, p=0.03, mc=1000, quarantining=quarantine_statuses)
                 prob_matrix = ic_results[0]
                 new_informed = ic_results[1]
 

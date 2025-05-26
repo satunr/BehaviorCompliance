@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from copy import deepcopy
 
 n = 100
-T = 100
+T = 60
 Repeat = 1
 
 beta = 0.20  #infection rate
