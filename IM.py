@@ -34,6 +34,8 @@ def IC_prob_matrix(g, S, p, mc=5000, quarantining=None):
     quarantine_matrix = np.array(quarantine_list)
     quarantine_matrix = np.mean(quarantine_matrix, axis=0)  # Average over all Monte Carlo simulations
 
+    A = [node for node in g.nodes() if random.uniform(0, 1) < quarantine_matrix[0][node]]  # Final informed set based on average probabilities
+
     return quarantine_matrix, A  # Return the average probability matrix and the final set of informed nodes
 
 def IC(g, S, p, mc=10):

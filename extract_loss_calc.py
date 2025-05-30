@@ -48,8 +48,8 @@ def write_matrices_to_file(matrix_groups, filename):
                 f.write("\n")  # Add blank line after each matrix
             f.write("\n\n\n")  # Add blank lines between groups
 
-matrices = lc.calculate_loss_on_many_networks(social_graph=social_graph, num_networks=10, si=100)
-write_matrices_to_file(matrices, "loss_matrices.txt")
+# matrices = lc.calculate_loss_on_many_networks(social_graph=social_graph, num_networks=10, si=100)
+# write_matrices_to_file(matrices, "loss_matrices.txt")
 
 def parse_matrices():
     """
@@ -60,6 +60,7 @@ def parse_matrices():
     Example usage: If you want to use I.C. matrix from first graph, it would be result[0][0]
                    If you want to use L.T. matrix (threshold 2) from first graph, it would be result[0][1][2]
     """
+    import numpy as np
     result = []
     current_group = None
     ic_matrix_rows = []
@@ -82,6 +83,12 @@ def parse_matrices():
                 # Save previous group's data if exists
                 if current_group is not None and ic_matrix_rows:
                     ic_matrix = np.array(ic_matrix_rows)
+                    if current_lt_matrix_rows:  # Save any pending L.T. matrix
+                        lt_matrix = np.array(current_lt_matrix_rows)
+                        if expected_columns is not None and lt_matrix.shape[1] != expected_columns:
+                            print(f"Error: L.T. matrix at line {i+1} has {lt_matrix.shape[1]} columns, expected {expected_columns}")
+                            return []
+                        lt_matrices.append(current_lt_matrix_rows)
                     result.append((ic_matrix, [np.array(m) for m in lt_matrices]))
                 
                 # Start new group
@@ -158,7 +165,17 @@ def parse_matrices():
         print(f"Error parsing file at line {i+1}: {lines[i] if i < len(lines) else 'EOF'} - {str(e)}")
         return []
 
-    return result
+    return simplify_matrices(result)  # Return only last rows of matrices for now.
+
+def simplify_matrices(matrices):
+    # Only keep the last row for every I.C., L.T. matrix
+    simplified = []
+    for ic_mat, lt_mats in matrices:
+        simplified_ic = ic_mat[-1:]  # Keep only the last row of I.C. matrix
+        simplified_lt = [lt_mat[-1:] for lt_mat in lt_mats]  # Keep only the last row of each L.T. matrix
+        simplified.append((simplified_ic, simplified_lt))
+
+    return simplified
 
 # Example usage
 if parse_matrices():
@@ -168,10 +185,10 @@ if parse_matrices():
     # Print results for verification
     for idx, (ic_mat, lt_mats) in enumerate(matrices, 1):
         print(f"Group {idx}:")
-        print("I.C. Matrix shape:", ic_mat.shape)
+        # print("I.C. Matrix shape:", ic_mat.shape)
         print("Number of L.T. Matrices:", len(lt_mats))
         print("I.C. Matrix:\n", ic_mat)
         for j, lt_mat in enumerate(lt_mats, 1):
-            print(f"L.T. Matrix {j} shape:", lt_mat.shape)
-            print(f"L.T. Matrix {j}:\n", lt_mat)
+            # print(f"L.T. Matrix with threshold {j - 1} shape:", lt_mat.shape)
+            print(f"L.T. Matrix with threshold {j - 1}:\n", lt_mat)
         print()

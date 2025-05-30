@@ -78,7 +78,7 @@ def calculate_loss(social_network, plot=False):
     # Factor to not have too many seeds (experimentally determined)
     num_seeds = round(0.15 * len(social_network.nodes()))
 
-    T = 30
+    T = 50
     informed = find_seeds.find_seed_set(social_network, num_seeds=num_seeds, exponent=0.5)
     print("# of initial informed nodes: ", len(informed))
 
