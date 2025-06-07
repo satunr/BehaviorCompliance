@@ -1,4 +1,232 @@
 import networkx as nx
+import SIR
+import parse
+import correlated_graphs
+import matplotlib.pyplot as plt
+from copy import deepcopy
+import pickle
+
+n = 100
+T = 60
+Repeat = 1
+
+beta = 0.20  #infection rate
+gamma = 0.03  # recovery rate
+mu = 0.10   # immunity loss
+init = 0.1
+
+# Parameters for misinformation
+misinformation = 0.2
+
+# Specify the filename
+filename = 'contact_network_text.txt'
+# Create the graph from the file
+contact_graph = parse.parse(filename)
+
+# Relabel nodes in parsed graph to avoid off by 1 errors in SIR.py
+# Create a mapping from old node to new node: i -> i - 1
+mapping = {node: node - 1 for node in contact_graph.nodes()}
+
+# Relabel the nodes
+contact_network = nx.relabel_nodes(contact_graph, mapping)
+social_network = correlated_graphs.create_w_k_hop_correlation(contact_network, k=2)[0]  # We just want the graph part of this output
+
+# Figure 1
+# Function to compare SIR runs with and without informed individuals. Quarantines are permanent
+def informed_vs_noninformed():
+    #----------
+    #
+    #  Run SIR with informed individuals
+    #
+    #----------
+
+    data1 = SIR.Simulate_SIR(contact_network=deepcopy(contact_network),social_network=deepcopy(social_network),T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,average_data=False,q=True,allow_restoration=False)[2]
+
+    # Extract x and y data from arrays
+    x1, y1 = data1[0], data1[1]
+
+    #----------
+    #
+    #  Run SIR without informed individuals
+    #
+    #----------
+
+    data2 = SIR.Simulate_SIR(contact_network=deepcopy(contact_network),social_network=deepcopy(social_network),T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,average_data=False,q=False,allow_restoration=False)[2]
+
+    # Extract x and y data from arrays
+    x2, y2 = data2[0], data2[1]
+
+    # Create the plot
+    plt.plot(x1, y1, label='With Informed', color='blue', marker='o')
+    plt.plot(x2, y2, label='Without Informed', color='red', marker='o')
+
+    # Customize the plot
+    plt.xlabel('Time')
+    plt.ylabel('# of Infected')
+    plt.title('Informed vs Non-Informed (Permanent Quarantine)')
+    plt.legend()  # Add legend to distinguish the lines
+    plt.grid(True)
+
+    # Show the plot
+    plt.show()
+
+    return data1, data2
+
+# Figure 2
+# Same as above, but with temporary quarantines
+def const_quarantines():
+    #----------
+    #
+    #  Run SIR with a constant quarantine for informed individuals
+    #
+    #----------
+
+    quarantine_constant = 40
+
+    data1 = SIR.Simulate_SIR(contact_network=deepcopy(contact_network),social_network=deepcopy(social_network),T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,average_data=False,q=quarantine_constant,allow_restoration=True)[2]
+
+    # Extract x and y data from arrays
+    x1, y1 = data1[0], data1[1]
+
+    #----------
+    #
+    #  Run SIR without quarantines
+    #
+    #----------
+
+    data2 = SIR.Simulate_SIR(contact_network=deepcopy(contact_network),social_network=deepcopy(social_network),T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,average_data=False,q=False,allow_restoration=False)[2]
+
+    # Extract x and y data from arrays
+    x2, y2 = data2[0], data2[1]
+
+    # Create the plot
+    plt.plot(x1, y1, label=f'With quarantine (constant value of {quarantine_constant})', color='blue', marker='o')
+    plt.plot(x2, y2, label='Without quarantine', color='red', marker='o')
+
+    # Customize the plot
+    plt.xlabel('Time')
+    plt.ylabel('# of Infected')
+    plt.title('Informed vs Non-Informed (Temporary Quarantine)')
+    plt.legend()  # Add legend to distinguish the lines
+    plt.grid(True)
+
+    # Show the plot
+    plt.show()
+
+    return data1, data2
+
+# Figure 3
+def normal_dist_quarantines():
+    #----------
+    #
+    #  Run SIR with a normal distribution for quarantine times
+    #
+    #----------
+
+    data1 = SIR.Simulate_SIR(contact_network=deepcopy(contact_network),social_network=deepcopy(social_network),T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,average_data=False,q=True,allow_restoration=True)[2]
+
+    # Extract x and y data from arrays
+    x1, y1 = data1[0], data1[1]
+
+    #----------
+    #
+    #  Run SIR without quarantines
+    #
+    #----------
+
+    data2 = SIR.Simulate_SIR(contact_network=deepcopy(contact_network),social_network=deepcopy(social_network),T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,average_data=False,q=False,allow_restoration=False)[2]
+
+    # Extract x and y data from arrays
+    x2, y2 = data2[0], data2[1]
+
+    # Create the plot
+    plt.plot(x1, y1, label='With quarantine', color='blue', marker='o')
+    plt.plot(x2, y2, label='Without quarantine', color='red', marker='o')
+
+    # Customize the plot
+    plt.xlabel('Time')
+    plt.ylabel('# of Infected')
+    plt.title('Informed vs Non-Informed (Normal Dist. Quarantine)')
+    plt.legend()  # Add legend to distinguish the lines
+    plt.grid(True)
+
+    # Show the plot
+    plt.show()
+
+    return data1, data2
+
+# Function to plot Jaccard similarity between contact and social networks (2-hop creation) as X, and existence of edge (0 or 1) as Y
+def plot_jaccard_similarity():
+    new_social = correlated_graphs.Jaccard_similarity_plot(contact_network)
+    return new_social
+
+# Pickle results from the functions
+def SIR_pickle_dump(filename='pickles.pkl'):
+    # We will pickle these parameters along with the results for later reference
+    presets = {'T': T, 'Repeat': Repeat, 'beta': beta, 'gamma': gamma, 'mu': mu, 'init': init}
+
+    # data1, data2 = informed_vs_noninformed()
+    data3, data4 = const_quarantines()
+    # data5, data6 = normal_dist_quarantines()
+    # data7 = plot_jaccard_similarity()
+
+    with open(filename, 'wb') as f:
+        # Clear the file before writing
+        f.truncate(0)
+
+        pickle.dump({'presets': presets}, f)
+        # pickle.dump({'data1': data1, 'data2': data2}, f)
+        pickle.dump({'data3': data3, 'data4': data4}, f)
+        # pickle.dump({'data5': data5, 'data6': data6}, f)
+        # pickle.dump({'data7': data7}, f)
+    print("Data has been pickled successfully.")
+
+SIR_pickle_dump()
+
+def pickle_load(filename='pickles.pkl'):
+    # Open the file in binary read mode
+    with open(filename, 'rb') as file:
+        data = pickle.load(file)
+
+    # Now `data` holds the deserialized object
+    print(data)
+
+# def misinformation_comp():
+#     #----------
+#     #
+#     #  Run SIR with misinformation
+#     #
+#     #----------
+
+#     social_network = correlated_graphs.create_w_k_hop_correlation(contact_network,k=2)[0]   # We just want the graph part of this output
+
+#     # NOTE: This data is derived from 2 separate runs of Simulate_SIR, and is therefore only an approx. comparison
+#     data1 = SIR.Simulate_SIR(contact_network=deepcopy(contact_network),social_network=deepcopy(social_network),T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,
+#                              average_data=False,q=True,allow_restoration=True, misinformation_prob=None)[2]
+#     data2 = SIR.Simulate_SIR(contact_network=deepcopy(contact_network),social_network=deepcopy(social_network),T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,
+#                              average_data=False,q=True,allow_restoration=False, misinformation_prob=misinformation)[2]
+
+#     # Extract x and y data from arrays
+#     x1, y1 = data1[0], data1[1]
+#     x2, y2 = data2[0], data2[1]
+
+#     # Create the plot
+#     plt.plot(x1, y1, label='Without Misinformation', color='blue', marker='o')
+#     plt.plot(x2, y2, label='With Misinformation', color='red', marker='o')
+
+#     # Customize the plot
+#     plt.xlabel('Time')
+#     plt.ylabel('# of Infected')
+#     plt.title('Misinformation Comparison')
+#     plt.legend()  # Add legend to distinguish the lines
+#     plt.grid(True)
+
+#     # Show the plot
+#     plt.show()
+
+# misinformation_comp()
+
+import networkx as nx
 import numpy as np
 import matplotlib.pyplot as plt
 import random
@@ -47,19 +275,15 @@ def create_correlated_digraph(base_graph, correlation_factor, base_probability=0
     
     return A
 
-# Modified function to accept a k parameter for hop distance
 def create_w_k_hop_correlation(base_graph, k):
+    x_vals, y_vals = [], []
+
     # Initialize an empty unweighted graph
     correlated_graph = nx.DiGraph()
     
     # Add all nodes from the base graph to the correlated graph
     correlated_graph.add_nodes_from(base_graph.nodes())
-    
-    # Initialize the similarity matrix (dictionary)
-    similarity_matrix = {}
-    
-    # Get nodes from the base graph
-    nodes = list(base_graph.nodes())
+    nodes = list(base_graph.nodes()) # Node list we will be working with
     
     # Compute Jaccard similarity for each pair of nodes based on k-hop neighborhoods
     for idx_i, i in enumerate(nodes):
@@ -79,107 +303,66 @@ def create_w_k_hop_correlation(base_graph, k):
             else:
                 similarity = intersection / union
             
-            # Store the similarity in the matrix
-            similarity_matrix[(i, j)] = similarity
-            
             # Add an edge with probability equal to the Jaccard similarity
             if random.random() < similarity:
                 correlated_graph.add_edge(i, j)  # Unweighted edge
-    
-    return correlated_graph, similarity_matrix
 
-# Create a larger base graph with ~100 nodes
-def create_sample_graph():
-    # Create an Erdős-Rényi random graph with 100 nodes and edge probability 0.05
-    num_nodes = 100
-    edge_prob = 0.05  # Adjust this probability to control density
-    G = nx.erdos_renyi_graph(num_nodes, edge_prob, seed=42)  # Seed for reproducibility
-    return G
+            x_vals.append(similarity)
+            y_vals.append(1 if correlated_graph.has_edge(i, j) else 0)
 
-if k_hop_simulation == True:
-    # Driver code to create, compute, and visualize the graphs
-    # Set a random seed for reproducibility of the correlated graphs
+    return correlated_graph, (x_vals, y_vals)  # Return the graph, similarity matrix, and x,y values for plotting
 
-    random.seed(42)
+def jaccard_similarity(set1, set2):
+    set1 = set(set1)
+    set2 = set(set2)
 
-    # Create the base graph
-    base_graph = create_sample_graph()
+    # intersection of two sets
+    intersection = len(set1.intersection(set2))
+    # Unions of two sets
+    union = len(set1.union(set2))
 
-    # Print basic info about the base graph
-    print("Base Graph Nodes:", len(base_graph.nodes()))
-    print("Base Graph Edges:", len(base_graph.edges()))
+    return intersection / union
 
-    # Compute the correlated graph with k=1 (1-hop)
-    correlated_graph_1hop, similarity_matrix_1hop = create_w_k_hop_correlation(base_graph, k=1)
+# H: Base graph, undirected
+def Jaccard_similarity_plot(H):
 
-    # Compute the correlated graph with k=2 (2-hop)
-    correlated_graph_2hop, similarity_matrix_2hop = create_w_k_hop_correlation(base_graph, k=2)
+    # Ego network of K-hops around each node in H and Jaccard similarity
+    K = 2
+    N = list(sorted(H.nodes()))
 
-    # Print basic info about the correlated graphs
-    print("\nCorrelated Graph (1-hop) Nodes:", len(correlated_graph_1hop.nodes()))
-    print("Correlated Graph (1-hop) Edges:", len(correlated_graph_1hop.edges()))
-    print("Correlated Graph (2-hop) Nodes:", len(correlated_graph_2hop.nodes()))
-    print("Correlated Graph (2-hop) Edges:", len(correlated_graph_2hop.edges()))
+    # Create ego network for each node
+    Ego = {u: list(nx.ego_graph(H, u, radius=K).nodes()) for u in H.nodes()}
 
-    # Print a sample of the similarity matrices (to avoid flooding the output)
-    print("\nSimilarity Matrix (1-hop, Sample):")
-    sample_pairs_1hop = list(similarity_matrix_1hop.items())[:5]  # Show first 5 pairs
-    for (i, j), similarity in sample_pairs_1hop:
-        print(f"Nodes ({i}, {j}): Jaccard Similarity = {similarity:.3f}")
+    # Compute Jaccard similarity for each pair of nodes in Ego
+    sim = {(N[i], N[j]): jaccard_similarity(Ego[N[i]], Ego[N[j]])
+        for i in range(len(N) - 1) for j in range(i + 1, len(N))}
 
-    print("\nSimilarity Matrix (2-hop, Sample):")
-    sample_pairs_2hop = list(similarity_matrix_2hop.items())[:5]  # Show first 5 pairs
-    for (i, j), similarity in sample_pairs_2hop:
-        print(f"Nodes ({i}, {j}): Jaccard Similarity = {similarity:.3f}")
+    # Create social graph G with density q
+    G = nx.DiGraph()
+    nE = 550
 
-    # Compute positions for nodes using a spring layout (same for all graphs for consistency)
-    pos = nx.spring_layout(base_graph, seed=42)  # Seed for reproducibility
+    # Sample 'nE' edge pairs with high Jaccard similarity
+    A = [(N[i], N[j]) for i in range(len(N) - 1) for j in range(i + 1, len(N))]
+    prob = [np.exp(sim[(N[i], N[j])]) for i in range(len(N) - 1) for j in range(i + 1, len(N))]
+    prob = [val / sum(prob) for val in prob]
 
-    # First comparison: Base Graph vs. 1-hop Correlated Graph
-    plt.figure(figsize=(12, 5))
+    E = np.random.choice(a=[i for i in range(len(A))], p=prob, size=nE, replace=False).tolist()
+    E = [A[index] for index in E]
 
-    # Plot the base graph
-    plt.subplot(121)
-    nx.draw(base_graph, pos, with_labels=False, node_size=50, node_color='lightblue', edge_color='gray', width=1)
-    plt.title("Base Graph")
+    # For each sampled edge (u, v),
+    # randomly choose whether to add edge from (u, v) or (v, u) in G
+    for (u, v) in E:
+        if random.choice([0, 1]) == 0:
+            G.add_edge(u, v)
+        else:
+            G.add_edge(v, u)
 
-    # Plot the 1-hop correlated graph
-    plt.subplot(122)
-    nx.draw(correlated_graph_1hop, pos, with_labels=False, node_size=50, node_color='salmon', edge_color='gray', width=1)
-    plt.title("Correlated Graph (1-hop)")
-
-    plt.tight_layout()
+    # Plot correlation between similarity and edge existence in undirected version of G
+    I = G.to_undirected()
+    plt.scatter([sim[(N[i], N[j])] for i in range(len(N) - 1) for j in range(i + 1, len(N))],
+        [int(I.has_edge(N[i], N[j])) for i in range(len(N) - 1) for j in range(i + 1, len(N))],
+                s=10, alpha=0.1)
     plt.show()
-
-    # Second comparison: Base Graph vs. 2-hop Correlated Graph
-    plt.figure(figsize=(12, 5))
-
-    # Plot the base graph again
-    plt.subplot(121)
-    nx.draw(base_graph, pos, with_labels=False, node_size=50, node_color='lightblue', edge_color='gray', width=1)
-    plt.title("Base Graph")
-
-    # Plot the 2-hop correlated graph
-    plt.subplot(122)
-    nx.draw(correlated_graph_2hop, pos, with_labels=False, node_size=50, node_color='lightgreen', edge_color='gray', width=1)
-    plt.title("Correlated Graph (2-hop)")
-
-    plt.tight_layout()
-    plt.show()
-
-# prob vector: 1 x n; probability of each node being informed
-    # vector because it represents network as last time step
-def generate_from_prob_matrix(network, prob_vector):
-    """
-    Generates a directed graph from a given probability matrix, and assigns edge weight attributes as probabilities.
-    """
-    G = deepcopy(network)
-
-    # Assign weights to edges based on the probability matrix
-    for i in range(0, len(G.nodes())):
-        for j in G.successors(i):
-            # G[i][j]['weight'] = abs(1 - prob_vector[i])  # 0 prob of informed -> 1 prob of having edges to neighbors
-            nx.set_edge_attributes(G, {(i, j): {'weight': abs(1 - prob_vector[i])}})
     
-    return G
+    return G  # Return the created graph for further use if needed
 

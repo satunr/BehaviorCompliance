@@ -7,12 +7,7 @@ import find_seeds
 import correlated_graphs
 # import parse
 import IM
-
 from copy import deepcopy
-
-# Set to True if you want to see difference in infection spread w/ 
-#   quarantining and non-quarantining for your given param.s.
-compare_quarantining_non_quarantining = False
 
 # I modified this code to allow infected individuals to no longer be infected after a certain period
 def sirs_step(G, state, L, beta, gamma, mu):
@@ -44,7 +39,6 @@ def sirs_step(G, state, L, beta, gamma, mu):
 
     return new_state
 
-
 def transition(L, P_prime):
 
     all_0s = [i for i in range(len(L)) if L[i] == 0]
@@ -61,7 +55,6 @@ def transition(L, P_prime):
             L[i] = 0
 
     return L
-
 
 def update_N_P(P, N, n, a=0.5, v=0.05):
     X = (P - N) / n
@@ -145,7 +138,7 @@ def misinformation_update(g, informed, quarantining, misinformation_prob, quaran
 # q: Set to true if you want quarantine periods to be factored into algorithm
 # save_all: Returns large array containing quarantine states at every time interval
 def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,average_data,
-                 q=True,allow_restoration=False,save_all=False,lt_threshold=None, misinformation_prob=None):
+                 q=False,allow_restoration=False,save_all=False,lt_threshold=None, misinformation_prob=None):
     if social_network == None:
         social_network = correlated_graphs.create_w_k_hop_correlation(contact_network, k=2)[0]
 
@@ -155,7 +148,7 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
         N = n - 1
         P = n - N
 
-        informed = find_seeds.find_seed_set(social_network, num_seeds=15,exponent=1)
+        informed = find_seeds.find_seed_set(social_network, num_seeds=10,exponent=1)
 
         # Set labels for informed set
         for node in informed:
@@ -184,10 +177,17 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
         PList = [P]
         Inf = [len([u for u in state.keys() if state[u] == 1])]
 
-        # d[i]: # of days individual i chooses to quarantine (or not quarantine if misinformed)
-        samples_array = np.random.normal(loc=14, scale=5, size=n)
-        # Take abs. value of the quarantine period samples, and round to nearest int. val.
-        d = [abs(round(x)) for x in samples_array]
+        # If an int is passed as q, we assume it is the quarantine period for all individuals
+        if isinstance(q, int) and q > 1:  # > 1 excludes the boolean cases
+            d = [q for _ in range(n)]
+            q = True  # Set to true so that we can use the quarantine edge removal function
+
+        # By default, quarantine period ~ Normal
+        else:
+            # d[i]: # of days individual i chooses to quarantine (or not quarantine if misinformed)
+            samples_array = np.random.normal(loc=14, scale=5, size=n)
+            # Take abs. value of the quarantine period samples, and round to nearest int. val.
+            d = [abs(round(x)) for x in samples_array]
 
         # Holds dynamic quarantine lengths
         quarantine_statuses = [0 for _ in range(0, n)]
@@ -197,12 +197,15 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
 
         quarantine_prob_matrix = np.zeros((T, n)) # T x n matrix: hold probabilities of quarantine for each node at each time step
         
-        misinformed = []
-        if misinformation_prob: 
-            misinformed = misinformation_update(contact_network, informed=informed, quarantining=quarantine_statuses,
-                                            misinformation_prob=misinformation_prob, quarantine_required=d)[0]
+        # misinformed = []
+        # if misinformation_prob != None: 
+        #     misinformed = misinformation_update(contact_network, informed=informed, quarantining=quarantine_statuses,
+        #                                     misinformation_prob=misinformation_prob, quarantine_required=d)[0]
 
         for t in range(T):
+            print(len(contact_network.edges()))
+            print(quarantine_statuses)
+            print("# of informed", len(informed))
 
             #--------
             #
@@ -211,7 +214,7 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
             #-------
 
             if lt_threshold == None: # If we are using I.C., that is
-                ic_results = IM.IC_prob_matrix(social_network, S=informed, p=0.03, mc=1000, quarantining=quarantine_statuses)
+                ic_results = IM.IC_prob_matrix(social_network, S=informed, p=0.01, mc=1000, quarantining=quarantine_statuses)
                 prob_matrix = ic_results[0]
                 new_informed = ic_results[1]
 
@@ -243,12 +246,12 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
             #--------
 
             # If we are using misinformation, update the contact network
-            if misinformation_prob != None:
-                misinformation_step = misinformation_update(g=contact_network, informed=informed, quarantining=quarantine_statuses, 
-                                                            misinformation_prob=misinformation_prob, quarantine_required=d)
-                misinformed = misinformed + misinformation_step[0]  # Update misinformed set
-                d = misinformation_step[1]  # Update quarantine choice for uninformed: They choose a negative quarantine period
-                if misinformed: informed = [item for item in informed if item not in misinformed]  # Update informed set to not include misinformed nodes
+            # if misinformation_prob != None:
+            #     misinformation_step = misinformation_update(g=contact_network, informed=informed, quarantining=quarantine_statuses, 
+            #                                                 misinformation_prob=misinformation_prob, quarantine_required=d)
+            #     misinformed = misinformed + misinformation_step[0]  # Update misinformed set
+            #     d = misinformation_step[1]  # Update quarantine choice for uninformed: They choose a negative quarantine period
+            #     if misinformed: informed = [item for item in informed if item not in misinformed]  # Update informed set to not include misinformed nodes
 
             # Dynamic updates
             P_prime, P, N = update_N_P(P, N, n)
@@ -279,24 +282,25 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
 
                     # If the quarantine time has been reached for the individual, remove from the infected category
                     if quarantine_statuses[u] >= d[u]:
+                        print("Quarantine reached")
+                        quarantine_statuses[u] = 0   # Individual takes a break from qurantining
                         if allow_restoration:
                             restore_edges(G_initial, contact_network, u)
-                        state[u] = 2
 
-                # Update status for misinformed individuals to not quarantine
-                if misinformation_prob != None and contact_network.nodes[u]['Informed?'] == 'Misinformed':
-                    # "quarantine" here is really a choice to not quarantine, for misinformed individuals
-                    quarantine_statuses[u] = quarantine_statuses[u] + 1
+                # # Update status for misinformed individuals to not quarantine
+                # if misinformation_prob != None and contact_network.nodes[u]['Informed?'] == 'Misinformed':
+                #     # "quarantine" here is really a choice to not quarantine, for misinformed individuals
+                #     quarantine_statuses[u] = quarantine_statuses[u] + 1
 
-                    # If the quarantine time has been reached for the individual, remove from the misinformed category
-                    if quarantine_statuses[u] >= d[u]:
-                        # Remove the misinformed status
-                        contact_network.nodes[u]['Informed?'] = 'Informed'
-                        misinformed.remove(u)
-                        informed.append(u)
+                #     # If the quarantine time has been reached for the individual, remove from the misinformed category
+                #     if quarantine_statuses[u] >= d[u]:
+                #         # Remove the misinformed status
+                #         contact_network.nodes[u]['Informed?'] = 'Informed'
+                #         misinformed.remove(u)
+                #         informed.append(u)
 
-                        # Individual makes choice on quarantine distribution, instead of non-quarantine distribution
-                        d[u] = round(np.random.normal(loc=14, scale=5))
+                #         # Individual makes choice on quarantine distribution, instead of non-quarantine distribution
+                #         d[u] = round(np.random.normal(loc=14, scale=5))
                         
 
             # Update infection count for plotting
