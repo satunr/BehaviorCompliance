@@ -214,7 +214,7 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
             #-------
 
             if lt_threshold == None: # If we are using I.C., that is
-                ic_results = IM.IC_prob_matrix(social_network, S=informed, p=0.01, mc=1000, quarantining=quarantine_statuses)
+                ic_results = IM.IC_prob_matrix(social_network, S=informed, p=0.03, mc=1000, quarantining=quarantine_statuses)
                 prob_matrix = ic_results[0]
                 new_informed = ic_results[1]
 

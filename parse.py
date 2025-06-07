@@ -50,8 +50,6 @@ def parse(filename):
                 # Update the minimum node index
                 min_node_index = min(min_node_index, i, j)
                 
-                print("Minimum node index found:", min_node_index)
-                
                 # Add the edge to the graph
                 G.add_edge(i, j)
     
