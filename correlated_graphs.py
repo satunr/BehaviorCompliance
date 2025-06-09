@@ -96,7 +96,7 @@ def jaccard_similarity(set1, set2):
     return intersection / union
 
 # H: Base graph, undirected
-def Jaccard_similarity_plot(H):
+def Jaccard_similarity_plot(H, plot=False):
 
     # Ego network of K-hops around each node in H and Jaccard similarity
     K = 2
@@ -111,7 +111,7 @@ def Jaccard_similarity_plot(H):
 
     # Create social graph G with density q
     G = nx.DiGraph()
-    nE = 450
+    nE = 1000
 
     # Sample 'nE' edge pairs with high Jaccard similarity
     A = [(N[i], N[j]) for i in range(len(N) - 1) for j in range(i + 1, len(N))]
@@ -130,11 +130,12 @@ def Jaccard_similarity_plot(H):
             G.add_edge(v, u)
 
     # Plot correlation between similarity and edge existence in undirected version of G
-    I = G.to_undirected()
-    plt.scatter([sim[(N[i], N[j])] for i in range(len(N) - 1) for j in range(i + 1, len(N))],
-        [int(I.has_edge(N[i], N[j])) for i in range(len(N) - 1) for j in range(i + 1, len(N))],
-                s=10, alpha=0.1)
-    plt.show()
+    if plot == True:
+        I = G.to_undirected()
+        plt.scatter([sim[(N[i], N[j])] for i in range(len(N) - 1) for j in range(i + 1, len(N))],
+            [int(I.has_edge(N[i], N[j])) for i in range(len(N) - 1) for j in range(i + 1, len(N))],
+                    s=10, alpha=0.01)
+        plt.show()
     
     return G  # Return the created graph for further use if needed
 

@@ -76,18 +76,21 @@ def update_N_P(P, N, n, a=0.5, v=0.05):
 
 # g: A graph, (mean, std): Parameters assoc. with taking P(edge removal) as a normal dist. sample, 
 #   w/ threshold as another param.
-def quarantine_edge_removal(g, node, states):
+def quarantine_edge_removal(g, node, states, quarantine_statuses):
     # Boolean value; Checks if "Informed" is an attribute of the node under consideration
-    is_informed = "Informed" in g.nodes[node].values()
+    is_informed = g.nodes[node].get('Informed?') == 'Informed'
 
     # Check if node's state is 1 (active)
     if states[node] == 1 and is_informed == True:
+        quarantine_statuses[node] = 1  # Set quarantine status to 1 (quarantining)
         # Get all neighbors of current node
         neighbors = list(g.neighbors(node))
         # Remove edges to all neighbors
         for neighbor in neighbors:
             g.remove_edge(node, neighbor)
-
+    
+    return quarantine_statuses
+        
 def restore_edges(g_init, g, node):
     # Determine connections that were removed
     initial_connections = [(node, neighbor) for neighbor in g_init.neighbors(node)]
@@ -148,7 +151,7 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
         N = n - 1
         P = n - N
 
-        informed = find_seeds.find_seed_set(social_network, num_seeds=10,exponent=1)
+        informed = find_seeds.find_seed_set(social_network, num_seeds=round(0.05 * len(social_network.nodes())),exponent=1)
 
         # Set labels for informed set
         for node in informed:
@@ -185,7 +188,7 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
         # By default, quarantine period ~ Normal
         else:
             # d[i]: # of days individual i chooses to quarantine (or not quarantine if misinformed)
-            samples_array = np.random.normal(loc=14, scale=5, size=n)
+            samples_array = np.random.normal(loc=14, scale=2, size=n)
             # Take abs. value of the quarantine period samples, and round to nearest int. val.
             d = [abs(round(x)) for x in samples_array]
 
@@ -203,7 +206,8 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
         #                                     misinformation_prob=misinformation_prob, quarantine_required=d)[0]
 
         for t in range(T):
-            print(len(contact_network.edges()))
+
+            print("# of connections in contact network", contact_network.number_of_edges())
             print(quarantine_statuses)
             print("# of informed", len(informed))
 
@@ -214,7 +218,7 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
             #-------
 
             if lt_threshold == None: # If we are using I.C., that is
-                ic_results = IM.IC_prob_matrix(social_network, S=informed, p=0.03, mc=1000, quarantining=quarantine_statuses)
+                ic_results = IM.IC_prob_matrix(social_network, S=informed, p=0.05, mc=1000, quarantining=quarantine_statuses)
                 prob_matrix = ic_results[0]
                 new_informed = ic_results[1]
 
@@ -253,39 +257,42 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
             #     d = misinformation_step[1]  # Update quarantine choice for uninformed: They choose a negative quarantine period
             #     if misinformed: informed = [item for item in informed if item not in misinformed]  # Update informed set to not include misinformed nodes
 
+
             # Dynamic updates
             P_prime, P, N = update_N_P(P, N, n)
             L = transition(L, P_prime)
 
             # Make copy before modifying
             copy_state = deepcopy(state)
-            # Update state using SIRS model
             state = sirs_step(contact_network, state, L, beta, gamma, mu)
+            
+
+            # These numbers should be the same
+            print(len([u for u in quarantine_statuses if quarantine_statuses[u] > 0]), "quarantined individuals at time", t)
+            print(len(set(informed).intersection(set([u for u in state.keys() if state[u] == 1]))), "informed and infected individuals at time", t)
 
             # Analyze state changes across all nodes
             for u in range(n):
-                if copy_state[u] != state[u]:
+                # At t==0, the state transition logic will not suffice. So check if anyone needs to be quarantined
+                # Determine what quarantines need to be made
+                if copy_state[u] != state[u] or t == 0:
                     # Record in state changes the time at which said change occurred
                     state_changes[u] = (u, state[u], t)
-
-                    # If there was a state change for node u, we can say that node u has not been in quarantine from T(n-1) to T(n),
-                    # regardless of what it becomes here
-                    quarantine_statuses[u] = 0
                     if q == True:
-                        quarantine_edge_removal(g=contact_network, node=u, states=state)
+                        quarantine_statuses = quarantine_edge_removal(g=contact_network, node=u, states=state, quarantine_statuses=quarantine_statuses)
 
-                # if applicable (node u infected in both T(n-1) and T(n), and is informed), update quarantine status for node u
-                elif copy_state[u] == state[u] and copy_state[u] == 1 and q == True and contact_network.nodes[u]['Informed?'] == 'Informed':
-                    # Individual chooses, at the first step in their infection, whether they want to quarantine
-                    # Add +1 to their quarantine period
+                # Determine what restorations need to be made
+                if q == True and contact_network.nodes[u]['Informed?'] == 'Informed' and (1 <= quarantine_statuses[u] <= d[u]):
                     quarantine_statuses[u] = quarantine_statuses[u] + 1
 
                     # If the quarantine time has been reached for the individual, remove from the infected category
                     if quarantine_statuses[u] >= d[u]:
                         print("Quarantine reached")
-                        quarantine_statuses[u] = 0   # Individual takes a break from qurantining
+                        quarantine_statuses[u] = 0   # Individual takes a break from quarantining
                         if allow_restoration:
                             restore_edges(G_initial, contact_network, u)
+
+                # state = sirs_step(contact_network, state, L, beta, gamma, mu)
 
                 # # Update status for misinformed individuals to not quarantine
                 # if misinformation_prob != None and contact_network.nodes[u]['Informed?'] == 'Misinformed':
@@ -301,7 +308,6 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
 
                 #         # Individual makes choice on quarantine distribution, instead of non-quarantine distribution
                 #         d[u] = round(np.random.normal(loc=14, scale=5))
-                        
 
             # Update infection count for plotting
             Inf.append(len([u for u in state.keys() if state[u] == 1]))
