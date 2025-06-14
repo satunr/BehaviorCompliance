@@ -8,23 +8,20 @@ import networkx as nx
 # Specify the filename
 filename = 'facebook_network0.txt'
 # Create the graph from the file
-# contact_network = parse.parse(filename)
 social_graph = parse.parse(filename)
+# social_graph = nx.erdos_renyi_graph(400, 0.05, seed=42)
 
 # Relabel nodes in parsed graph to avoid off by 1 errors in SIR.py
 # Create a mapping from old node to new node: i -> i - 1
 # mapping = {node: node - 1 for node in contact_network.nodes()}
 mapping = {node: node - 1 for node in social_graph.nodes()}
 
-
 # Relabel the nodes
 # contact_network = nx.relabel_nodes(contact_network, mapping)
 social_graph = nx.relabel_nodes(social_graph, mapping)
-# social_graph = correlated_graphs.create_w_k_hop_correlation(contact_network,k=2)[0]   # We just want the graph part of this output
 
 # A list of lists: First of each is I.C., second is L.T.
 # lc.social_graph: Created w/ 2-hop correlation from contact_graph (113 nodes, ~2k edges)
-
 
 def write_matrices_to_file(matrix_groups, filename):
     with open(filename, 'w') as f:
@@ -48,9 +45,6 @@ def write_matrices_to_file(matrix_groups, filename):
                 f.write("\n")  # Add blank line after each matrix
             f.write("\n\n\n")  # Add blank lines between groups
 
-# matrices = lc.calculate_loss_on_many_networks(social_graph=social_graph, num_networks=10, si=100)
-# write_matrices_to_file(matrices, "loss_matrices.txt")
-
 def parse_matrices():
     """
     Returns:
@@ -60,7 +54,6 @@ def parse_matrices():
     Example usage: If you want to use I.C. matrix from first graph, it would be result[0][0]
                    If you want to use L.T. matrix (threshold 2) from first graph, it would be result[0][1][2]
     """
-    import numpy as np
     result = []
     current_group = None
     ic_matrix_rows = []
@@ -179,7 +172,10 @@ def simplify_matrices(matrices):
 
 # Example usage
 if parse_matrices():
-    # Parse the matrices from the file
+    matrices = lc.calculate_loss_on_many_networks(social_graph=social_graph, num_networks=10, si=200)
+    write_matrices_to_file(matrices, "loss_matrices.txt")
+
+    # # Parse the matrices from the file
     matrices = parse_matrices()
 
     # Print results for verification

@@ -85,57 +85,43 @@ def create_w_k_hop_correlation(base_graph, k):
     return correlated_graph, (x_vals, y_vals)  # Return the graph, similarity matrix, and x,y values for plotting
 
 def jaccard_similarity(set1, set2):
-    set1 = set(set1)
-    set2 = set(set2)
+    set1, set2 = set(set1), set(set2)
+    intersection = len(set1 & set2)
+    union = len(set1 | set2)
+    return intersection / union if union > 0 else 0
 
-    # intersection of two sets
-    intersection = len(set1.intersection(set2))
-    # Unions of two sets
-    union = len(set1.union(set2))
-
-    return intersection / union
-
-# H: Base graph, undirected
-def Jaccard_similarity_plot(H, plot=False):
-
-    # Ego network of K-hops around each node in H and Jaccard similarity
+def create_social_graph(H, nE=100):
+# Ego networks and Jaccard similarity
     K = 2
-    N = list(sorted(H.nodes()))
+    N = sorted(H.nodes())
+    Ego = {u: list(nx.ego_graph(H, u, radius=K).nodes()) for u in N}
 
-    # Create ego network for each node
-    Ego = {u: list(nx.ego_graph(H, u, radius=K).nodes()) for u in H.nodes()}
-
-    # Compute Jaccard similarity for each pair of nodes in Ego
+    # Compute Jaccard similarity for each pair
     sim = {(N[i], N[j]): jaccard_similarity(Ego[N[i]], Ego[N[j]])
         for i in range(len(N) - 1) for j in range(i + 1, len(N))}
 
-    # Create social graph G with density q
+    # Rank similarities (high sim → low rank → high probability)
+    sorted_pairs = sorted(sim.items(), key=lambda x: x[1], reverse=True)
+    ranks = {pair: rank + 1 for rank, (pair, _) in enumerate(sorted_pairs)}
+    max_rank = max(ranks.values())
+
+    # Build edge list and sampling probabilities
+    A = list(ranks.keys())
+    prob = [1 / ranks[pair] for pair in A]
+    prob = [p / sum(prob) for p in prob]
+
+    # Sample edges based on rank-weighted probability
+    sampled_indices = np.random.choice(len(A), size=nE, replace=False, p=prob)
+    sampled_edges = [A[i] for i in sampled_indices]
+
+    # Build directed social graph G
     G = nx.DiGraph()
-    nE = 1000
-
-    # Sample 'nE' edge pairs with high Jaccard similarity
-    A = [(N[i], N[j]) for i in range(len(N) - 1) for j in range(i + 1, len(N))]
-    prob = [np.exp(sim[(N[i], N[j])]) for i in range(len(N) - 1) for j in range(i + 1, len(N))]
-    prob = [val / sum(prob) for val in prob]
-
-    E = np.random.choice(a=[i for i in range(len(A))], p=prob, size=nE, replace=False).tolist()
-    E = [A[index] for index in E]
-
-    # For each sampled edge (u, v),
-    # randomly choose whether to add edge from (u, v) or (v, u) in G
-    for (u, v) in E:
+    G.add_nodes_from(H.nodes())
+    for (u, v) in sampled_edges:
         if random.choice([0, 1]) == 0:
             G.add_edge(u, v)
         else:
             G.add_edge(v, u)
 
-    # Plot correlation between similarity and edge existence in undirected version of G
-    if plot == True:
-        I = G.to_undirected()
-        plt.scatter([sim[(N[i], N[j])] for i in range(len(N) - 1) for j in range(i + 1, len(N))],
-            [int(I.has_edge(N[i], N[j])) for i in range(len(N) - 1) for j in range(i + 1, len(N))],
-                    s=10, alpha=0.01)
-        plt.show()
-    
-    return G  # Return the created graph for further use if needed
+    return G, sim
 

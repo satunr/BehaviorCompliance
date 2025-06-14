@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from copy import deepcopy
 import pickle
 import numpy as np
+import pandas as pd
 
 n = 100
 T = 100
@@ -19,75 +20,10 @@ init = 0.15
 # Parameters for misinformation
 misinformation = 0.2
 
-# Specify the filename
-filename = 'contact_network_text.txt'
-# Create the graph from the file
-# contact_graph = parse.parse(filename)
-
-# # Relabel nodes in parsed graph to avoid off by 1 errors in SIR.py
-# # Create a mapping from old node to new node: i -> i - 1
-# mapping = {node: node - 1 for node in contact_graph.nodes()}
-
-# # Relabel the nodes
-# contact_network = nx.relabel_nodes(contact_graph, mapping)
-
 contact_network = nx.erdos_renyi_graph(100, 0.05, seed=42)
-
-# # Plot the contact network with pyplot
-# print("Mean node degree:", sum(dict(contact_network.degree()).values()) / len(contact_network.nodes()))
-# plt.figure(figsize=(10, 10))
-# nx.draw(contact_network, with_labels=True, node_size=50, font_size=8, font_color='black', node_color='blue', edge_color='gray')
-# plt.title('Contact Network')
-# plt.show()
-
-
-# social_network = correlated_graphs.create_w_k_hop_correlation(contact_network, k=2)[0]  # We just want the graph part of this output
-# social_network = correlated_graphs.Jaccard_similarity_plot(contact_network)
 
 social_network = nx.erdos_renyi_graph(100, 0.05, seed=42)  # Placeholder for social network, replace with actual creation logic
 social_network = social_network.to_directed()  # Ensure the social network is directed
-
-# Figure 1
-# Function to compare SIR runs with and without informed individuals. Quarantines are permanent
-# def informed_vs_noninformed():
-#     #----------
-#     #
-#     #  Run SIR with informed individuals
-#     #
-#     #----------
-
-#     # Average out runs with matplotlib fill-between
-#     data1 = SIR.Simulate_SIR(contact_network=deepcopy(contact_network),social_network=deepcopy(social_network),T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,average_data=False,q=True,allow_restoration=False)[2]
-
-#     # Extract x and y data from arrays
-#     x1, y1 = data1[0], data1[1]
-
-#     #----------
-#     #
-#     #  Run SIR without informed individuals
-#     #
-#     #----------
-
-#     data2 = SIR.Simulate_SIR(contact_network=deepcopy(contact_network),social_network=deepcopy(social_network),T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,average_data=False,q=False,allow_restoration=False)[2]
-
-#     # Extract x and y data from arrays
-#     x2, y2 = data2[0], data2[1]
-
-#     # Create the plot
-#     plt.plot(x1, y1, label='With Informed', color='blue', marker='o')
-#     plt.plot(x2, y2, label='Without Informed', color='red', marker='o')
-
-#     # Customize the plot
-#     plt.xlabel('Time')
-#     plt.ylabel('# of Infected')
-#     plt.title('Informed vs Non-Informed (Permanent Quarantine)')
-#     plt.legend()  # Add legend to distinguish the lines
-#     plt.grid(True)
-
-#     # Show the plot
-#     plt.show()
-
-#     return data1, data2
 
 def informed_vs_noninformed():
     T_runs = []
@@ -133,66 +69,22 @@ def informed_vs_noninformed():
     std_noninf = np.std(y_noninformed, axis=0)
 
     # Plot with fill_between for both
-    plt.plot(x, mean_inf, label='With Informed', color='blue')
+    plt.plot(x, mean_inf, label='With quarantine', color='blue')
     plt.fill_between(x, mean_inf - std_inf, mean_inf + std_inf, color='blue', alpha=0.3)
 
-    plt.plot(x, mean_noninf, label='Without Informed', color='red')
+    plt.plot(x, mean_noninf, label='Without quarantine', color='red')
     plt.fill_between(x, mean_noninf - std_noninf, mean_noninf + std_noninf, color='red', alpha=0.3)
 
     # Customize plot
     plt.xlabel('Time')
     plt.ylabel('# of Infected')
-    plt.title('Informed vs Non-Informed (Permanent Quarantine)')
+    plt.title('SIR with Permanent Quarantine')
     plt.legend()
     plt.grid(True)
 
     plt.show()
 
     return (x, mean_inf, std_inf), (x, mean_noninf, std_noninf)
-
-
-# Figure 2
-# Same as above, but with temporary quarantines
-# def const_quarantines():
-#     #----------
-#     #
-#     #  Run SIR with a constant quarantine for informed individuals
-#     #
-#     #----------
-
-#     quarantine_constant = 14
-
-#     data1 = SIR.Simulate_SIR(contact_network=deepcopy(contact_network),social_network=deepcopy(social_network),T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,average_data=False,q=quarantine_constant,allow_restoration=True)[2]
-
-#     # Extract x and y data from arrays
-#     x1, y1 = data1[0], data1[1]
-
-#     #----------
-#     #
-#     #  Run SIR without quarantines
-#     #
-#     #----------
-
-#     data2 = SIR.Simulate_SIR(contact_network=deepcopy(contact_network),social_network=deepcopy(social_network),T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,average_data=False,q=False,allow_restoration=False)[2]
-
-#     # Extract x and y data from arrays
-#     x2, y2 = data2[0], data2[1]
-
-#     # Create the plot
-#     plt.plot(x1, y1, label=f'With quarantine (constant value of {quarantine_constant})', color='blue', marker='o')
-#     plt.plot(x2, y2, label='Without quarantine', color='red', marker='o')
-
-#     # Customize the plot
-#     plt.xlabel('Time')
-#     plt.ylabel('# of Infected')
-#     plt.title('Informed vs Non-Informed (Temporary Quarantine)')
-#     plt.legend()  # Add legend to distinguish the lines
-#     plt.grid(True)
-
-#     # Show the plot
-#     plt.show()
-
-#     return data1, data2
 
 def const_quarantines():
     quarantine_constant = 14
@@ -236,7 +128,7 @@ def const_quarantines():
     mean_noq = np.mean(y_noq, axis=0)
     std_noq = np.std(y_noq, axis=0)
 
-    plt.plot(x, mean_q, label=f'With quarantine (q={quarantine_constant})', color='blue')
+    plt.plot(x, mean_q, label=f'With constant quarantine (q={quarantine_constant})', color='blue')
     plt.fill_between(x, mean_q - std_q, mean_q + std_q, color='blue', alpha=0.3)
 
     plt.plot(x, mean_noq, label='Without quarantine', color='red')
@@ -244,53 +136,12 @@ def const_quarantines():
 
     plt.xlabel('Time')
     plt.ylabel('# of Infected')
-    plt.title('Informed vs Non-Informed (Temporary Quarantine)')
+    plt.title('SIR with Constant Quarantine')
     plt.legend()
     plt.grid(True)
     plt.show()
 
     return (x, mean_q, std_q), (x, mean_noq, std_noq)
-
-
-# Figure 3
-# def normal_dist_quarantines():
-#     #----------
-#     #
-#     #  Run SIR with a normal distribution for quarantine times
-#     #
-#     #----------
-
-#     data1 = SIR.Simulate_SIR(contact_network=deepcopy(contact_network),social_network=deepcopy(social_network),T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,average_data=False,q=True,allow_restoration=True)[2]
-
-#     # Extract x and y data from arrays
-#     x1, y1 = data1[0], data1[1]
-
-#     #----------
-#     #
-#     #  Run SIR without quarantines
-#     #
-#     #----------
-
-#     data2 = SIR.Simulate_SIR(contact_network=deepcopy(contact_network),social_network=deepcopy(social_network),T=T,Repeat=Repeat,beta=beta,gamma=gamma,mu=mu,init=init,average_data=False,q=False,allow_restoration=False)[2]
-
-#     # Extract x and y data from arrays
-#     x2, y2 = data2[0], data2[1]
-
-#     # Create the plot
-#     plt.plot(x1, y1, label='With quarantine', color='blue', marker='o')
-#     plt.plot(x2, y2, label='Without quarantine', color='red', marker='o')
-
-#     # Customize the plot
-#     plt.xlabel('Time')
-#     plt.ylabel('# of Infected')
-#     plt.title('Informed vs Non-Informed (Normal Dist. Quarantine)')
-#     plt.legend()  # Add legend to distinguish the lines
-#     plt.grid(True)
-
-#     # Show the plot
-#     plt.show()
-
-#     return data1, data2
 
 def normal_dist_quarantines():
     num_trials = 10
@@ -341,7 +192,7 @@ def normal_dist_quarantines():
 
     plt.xlabel('Time')
     plt.ylabel('# of Infected')
-    plt.title('Informed vs Non-Informed (Normal Dist. Quarantine)')
+    plt.title('SIR with Normally Distributed Quarantine')
     plt.legend()
     plt.grid(True)
     plt.show()
@@ -350,8 +201,43 @@ def normal_dist_quarantines():
 
 # Function to plot Jaccard similarity between contact and social networks (2-hop creation) as X, and existence of edge (0 or 1) as Y
 def plot_jaccard_similarity():
-    social = correlated_graphs.Jaccard_similarity_plot(contact_network, plot=True)
-    return social
+    # Load and preprocess graph
+    H = nx.read_gml('Freeman3.gml')
+    H = nx.convert_node_labels_to_integers(H, first_label=0)
+    contact_graph = H.to_undirected()
+
+    # Relabel nodes in parsed graph to avoid off by 1 errors in SIR.py
+    # Create a mapping from old node to new node: i -> i - 1
+    mapping = {node: node - 1 for node in contact_graph.nodes()}
+
+    # Relabel the nodes
+    # contact_graph = nx.relabel_nodes(contact_graph, mapping)
+    # contact_graph = nx.erdos_renyi_graph(100, 0.05, seed=42)  # Placeholder for contact graph, replace with actual creation logic
+
+    social_graph_result = correlated_graphs.create_social_graph(contact_graph)
+    social_graph = social_graph_result[0]
+    sim = social_graph_result[1]
+
+    # Plot
+    # Plot: Similarity vs. Edge Existence in Undirected G
+    I = social_graph.to_undirected()
+    data = [(sim[pair], int(I.has_edge(*pair))) for pair in sim]
+    df = pd.DataFrame(data, columns=['similarity', 'edge'])
+
+    # Bin similarities and average edge existence
+    df['bin'] = pd.cut(df['similarity'], bins=10)
+    bin_means = df.groupby('bin')['edge'].mean()
+
+    # Plot
+    bin_means.plot(kind='bar', color='skyblue', edgecolor='black')
+    plt.ylabel("Probability of edge existence")
+    plt.xlabel("Jaccard similarity bin")
+    plt.title("Edge Likelihood vs. Jaccard Similarity")
+    plt.xticks(rotation=45)
+    plt.tight_layout()
+    plt.show()
+
+    return df, bin_means, 
 
 # Pickle results from the functions
 def SIR_pickle_dump(filename='pickles.pkl'):
@@ -361,17 +247,16 @@ def SIR_pickle_dump(filename='pickles.pkl'):
     informed_vs_noninformed()
     const_quarantines()
     normal_dist_quarantines()
-    # data7 = plot_jaccard_similarity()
+    plot_jaccard_similarity()
 
     with open(filename, 'wb') as f:
         # Clear the file before writing
         f.truncate(0)
 
-        pickle.dump({'presets': presets}, f)
-        # pickle.dump({'data1': data1, 'data2': data2}, f)
-        # pickle.dump({'data3': data3, 'data4': data4}, f)
-        # pickle.dump({'data5': data5, 'data6': data6}, f)
-        # pickle.dump({'data7': data7}, f)
+        pickle.dump({'SIR presets': presets}, f)
+        pickle.dump({'Informed vs Non-Informed': informed_vs_noninformed()}, f)
+        pickle.dump({'Constant Quarantines': const_quarantines()}, f)
+        pickle.dump({'Normal Dist. Quarantines': normal_dist_quarantines()}, f)
     print("Data has been pickled successfully.")
 
 SIR_pickle_dump()

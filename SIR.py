@@ -143,7 +143,9 @@ def misinformation_update(g, informed, quarantining, misinformation_prob, quaran
 def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,average_data,
                  q=False,allow_restoration=False,save_all=False,lt_threshold=None, misinformation_prob=None):
     if social_network == None:
-        social_network = correlated_graphs.create_w_k_hop_correlation(contact_network, k=2)[0]
+        social_network = correlated_graphs.create_social_graph(contact_network)[0]
+
+    print(len(social_network.nodes()), "nodes in social network")
 
     n = len(contact_network.nodes())
     All_Init = {t: [] for t in range(T + 1)}
@@ -279,6 +281,7 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
                     # Record in state changes the time at which said change occurred
                     state_changes[u] = (u, state[u], t)
                     if q == True:
+                        # Side effect: Edge removal
                         quarantine_statuses = quarantine_edge_removal(g=contact_network, node=u, states=state, quarantine_statuses=quarantine_statuses)
 
                 # Determine what restorations need to be made

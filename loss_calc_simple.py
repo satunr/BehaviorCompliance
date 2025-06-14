@@ -71,22 +71,17 @@ def remove_random_nodes(graph, num_nodes):
 def calculate_loss(social_network, plot=False):
     cyto_social = None
 
-    # Send the NetworkX graph to Cytoscape
-    # p4c.create_network_from_networkx(social_network, collection="My NetworkX Graph", title="Social Subgraph")
-
     ic_results = None
-    # Factor to not have too many seeds (experimentally determined)
-    num_seeds = round(0.15 * len(social_network.nodes()))
 
-    T = 50
-    informed = find_seeds.find_seed_set(social_network, num_seeds=num_seeds, exponent=0.5)
+    num_seeds = round(0.10 * len(social_network.nodes()))
+
+    T = 20
+    informed = find_seeds.find_seed_set(social_network, num_seeds=num_seeds, exponent=1)
     print("# of initial informed nodes: ", len(informed))
 
     ic_matrix = np.zeros((T, len(social_network.nodes())))
 
-    # Probabilities are weighted to be small, as the networks are highyly connected
-    activation_probabilities = np.random.normal(loc=0.03, scale=0.02, size=(1, len(social_network.nodes())))
-    # activation_probabilities = 0.03
+    activation_probabilities = 0.02
 
     matrices = []
 
@@ -116,7 +111,7 @@ def calculate_loss(social_network, plot=False):
 
     losses = []
     for i in range(0,11):  # Vary threshold parameter
-        print("# of initial informed nodes for L.T.: ", len(seeds))
+        print("Running L.T. with threshold: ", i)
 
         lt_matrix = np.zeros((T, len(social_network.nodes())))  # Only for printing purposes
 
@@ -124,7 +119,7 @@ def calculate_loss(social_network, plot=False):
         # loss_matrix = np.zeros((T, 1))
 
         for j in range(0, T):
-            print("T for L.T.: ", i)
+            print("T for L.T.: ", j)
             print("# of informed nodes: ", len(informed))
 
             # Inferred data using L.T.
@@ -137,23 +132,6 @@ def calculate_loss(social_network, plot=False):
 
         for node in informed:
             nx.set_node_attributes(social_network, {node: 'Informed'}, 'Informed?')
-
-        # if ping_cytoscape == True:
-        #     cyto_social_lt = correlated_graphs.generate_from_prob_matrix(social_network, lt_matrix[T-1]) # Adds probabilistic edge weight attributes
-
-        #     # Verify connection to Cytoscape
-        #     print(p4c.cytoscape_ping())
-
-        #     # Export the NetworkX graph to Cytoscape
-        #     network1 = p4c.create_network_from_networkx(cyto_social_lt, collection="My Network Collection", title=f"Social after L.T. (Tau = {i})")
-            
-        #     # Apply a layout (e.g., force-directed)
-        #     p4c.layout_network("force-directed")
-
-        #     # Apply a default visual style
-        #     p4c.set_visual_style("default")
-        
-    # print("Losses: ", losses)
 
         matrices.append(lt_matrix)
 
@@ -180,7 +158,7 @@ def calculate_loss(social_network, plot=False):
 
 # Si: Size of subgraph to generate
 # num_networks: Number of subgraphs to generate
-def calculate_loss_on_many_networks(social_graph, num_networks=10, si=70):
+def calculate_loss_on_many_networks(social_graph, num_networks=10, si=25):
     # Generate some random graphs (remove just 1 random node to keep them similar)
     data = [random_walk_subgraph(social_graph, si=si) for _ in range(num_networks)]
     data = [relabel_nodes_sequential(graph)[0] for graph in data]  # Relabel nodes to sequential integers
