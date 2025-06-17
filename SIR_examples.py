@@ -17,9 +17,6 @@ gamma = 0.07  # recovery rate
 mu = 0.10   # immunity loss
 init = 0.15
 
-# Parameters for misinformation
-misinformation = 0.2
-
 contact_network = nx.erdos_renyi_graph(100, 0.05, seed=42)
 
 social_network = nx.erdos_renyi_graph(100, 0.05, seed=42)  # Placeholder for social network, replace with actual creation logic

@@ -62,6 +62,19 @@ def remove_random_nodes(graph, num_nodes):
     
     return new_graph
 
+def edge_existence_probability(num_nodes, edge_list):
+    if num_nodes < 2:
+        return 0.0  # No possible edges
+
+    # Total possible directed edges (excluding self-loops)
+    total_possible_edges = num_nodes * (num_nodes - 1)
+
+    # Use a set to avoid counting duplicate edges
+    unique_edges = set(edge_list)
+    actual_edges = len(unique_edges)
+
+    return actual_edges / total_possible_edges
+
 #--------
 #
 #  Observed data (from I.C.)
@@ -110,7 +123,12 @@ def calculate_loss(social_network, plot=False):
     seeds = find_seeds.find_seed_set(social_network, num_seeds=num_seeds, exponent=1)
 
     losses = []
-    for i in range(0,11):  # Vary threshold parameter
+    n_ba = len(social_network.nodes())
+    # p_ba = edge_existence_probability(n_ba, social_network.edges())
+    p_ba = activation_probabilities
+    binomial_approximation = n_ba * p_ba + np.sqrt(n_ba * p_ba * (1 - p_ba))
+    print("Binomial approximation for threshold: ", binomial_approximation)
+    for i in range(0,round(binomial_approximation)):  # Vary threshold parameter
         print("Running L.T. with threshold: ", i)
 
         lt_matrix = np.zeros((T, len(social_network.nodes())))  # Only for printing purposes

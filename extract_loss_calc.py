@@ -172,7 +172,7 @@ def simplify_matrices(matrices):
 
 # Example usage
 if parse_matrices():
-    matrices = lc.calculate_loss_on_many_networks(social_graph=social_graph, num_networks=10, si=200)
+    matrices = lc.calculate_loss_on_many_networks(social_graph=social_graph, num_networks=10, si=150)
     write_matrices_to_file(matrices, "loss_matrices.txt")
 
     # # Parse the matrices from the file

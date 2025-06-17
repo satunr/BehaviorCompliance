@@ -1,10 +1,11 @@
-# import SIR
-# import networkx as nx
-# from copy import deepcopy
-# import matplotlib.pyplot as plt
-# import numpy as np
-# import correlated_graphs
-# import pickle
+import SIR
+import networkx as nx
+from copy import deepcopy
+import matplotlib.pyplot as plt
+import numpy as np
+import correlated_graphs
+import pickle
+
 
 # n = 100
 # T = 100
