@@ -124,8 +124,8 @@ def calculate_loss(social_network, plot=False):
 
     losses = []
     n_ba = len(social_network.nodes())
-    # p_ba = edge_existence_probability(n_ba, social_network.edges())
-    p_ba = activation_probabilities
+    p_ba = edge_existence_probability(n_ba, social_network.edges())
+    # p_ba = activation_probabilities
     binomial_approximation = n_ba * p_ba + np.sqrt(n_ba * p_ba * (1 - p_ba))
     print("Binomial approximation for threshold: ", binomial_approximation)
     for i in range(0,round(binomial_approximation)):  # Vary threshold parameter
