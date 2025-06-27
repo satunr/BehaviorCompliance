@@ -199,7 +199,7 @@ def normal_dist_quarantines():
 # Function to plot Jaccard similarity between contact and social networks (2-hop creation) as X, and existence of edge (0 or 1) as Y
 def plot_jaccard_similarity():
     # Load and preprocess graph
-    H = nx.read_gml('Freeman3.gml')
+    H = nx.read_gml('experiment_data/Freeman3.gml')
     H = nx.convert_node_labels_to_integers(H, first_label=0)
     contact_graph = H.to_undirected()
 
@@ -237,7 +237,7 @@ def plot_jaccard_similarity():
     return df, bin_means, 
 
 # Pickle results from the functions
-def SIR_pickle_dump(filename='pickles.pkl'):
+def SIR_pickle_dump(filename='experiment_data/pickles.pkl'):
     # We will pickle these parameters along with the results for later reference
     presets = {'T': T, 'Repeat': Repeat, 'beta': beta, 'gamma': gamma, 'mu': mu, 'init': init}
 
@@ -258,7 +258,7 @@ def SIR_pickle_dump(filename='pickles.pkl'):
 
 SIR_pickle_dump()
 
-def pickle_load(filename='pickles.pkl'):
+def pickle_load(filename='experiment_data/pickles.pkl'):
     # Open the file in binary read mode
     with open(filename, 'rb') as file:
         data = pickle.load(file)

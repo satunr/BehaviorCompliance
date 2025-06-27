@@ -6,23 +6,16 @@ import networkx as nx
 
 # Real-world network data
 # Specify the filename
-filename = 'facebook_network0.txt'
+filename = 'experiment_data/facebook_network0.txt'
 # Create the graph from the file
 social_graph = parse.parse(filename)
-# social_graph = nx.erdos_renyi_graph(400, 0.05, seed=42)
 
-# Relabel nodes in parsed graph to avoid off by 1 errors in SIR.py
-# Create a mapping from old node to new node: i -> i - 1
-# mapping = {node: node - 1 for node in contact_network.nodes()}
 mapping = {node: node - 1 for node in social_graph.nodes()}
 
 # Relabel the nodes
-# contact_network = nx.relabel_nodes(contact_network, mapping)
 social_graph = nx.relabel_nodes(social_graph, mapping)
 
 # A list of lists: First of each is I.C., second is L.T.
-# lc.social_graph: Created w/ 2-hop correlation from contact_graph (113 nodes, ~2k edges)
-
 def write_matrices_to_file(matrix_groups, filename):
     with open(filename, 'w') as f:
         # Clear the file content
@@ -64,7 +57,7 @@ def parse_matrices():
     expected_columns = None
 
     try:
-        with open("loss_matrices.txt", "r") as file:
+        with open("experiment_data/loss_matrices.txt", "r") as file:
             lines = [line.strip() for line in file if line.strip()]
 
         i = 0
@@ -173,7 +166,7 @@ def simplify_matrices(matrices):
 # Example usage
 if parse_matrices():
     matrices = lc.calculate_loss_on_many_networks(social_graph=social_graph, num_networks=10, si=150)
-    write_matrices_to_file(matrices, "loss_matrices.txt")
+    write_matrices_to_file(matrices, "experiment_data/loss_matrices.txt")
 
     # # Parse the matrices from the file
     matrices = parse_matrices()

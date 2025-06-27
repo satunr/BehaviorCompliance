@@ -7,119 +7,142 @@ from scipy.optimize import minimize
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import random
-from scipy.optimize import differential_evolution
 
 # Generate contact and social graphs
-n = 100
+n = 150
 p = 0.05
 contact_graph = nx.erdos_renyi_graph(n, p, seed=42)
 social_graph = correlated_graphs.create_social_graph(contact_graph, nE=2 * len(contact_graph.edges()))[0]
 
 # Simulation parameters
-T = 50
+T = 150
 Repeat = 1
-beta = 0.15
+beta = 0.11
 gamma = 0.10
 mu = 0.10
 init = 0.10
+q = False
 
-# Run SIR simulation
 SIR_results = SIR.Simulate_SIR(
     contact_network=deepcopy(contact_graph),
     social_network=deepcopy(social_graph),
     T=T, Repeat=Repeat,
     beta=beta, gamma=gamma, mu=mu, init=init,
-    average_data=False, q=False, allow_restoration=False, save_all=True
+    average_data=False, q=q, allow_restoration=False, save_all=True
 )
 
 mean_degrees = np.mean(SIR_results[6])   # Mean degree of contact network over time
 true_dynamics = SIR_results[4]
 num_nodes = len(contact_graph.nodes())
+binomial_bound = n * p + np.sqrt(n * p * (1 - p))
 
-# Compute true w1 and w2 values
+if num_nodes == 0:
+    raise ValueError("The contact graph has no nodes. Please check the graph generation parameters.")
+
+# Compute true w1 and w2 values: Mean degree and fraction of recovered nodes
 true_w = []
 for time in range(T):
     true_w1 = mean_degrees
-    true_w2 = sum(1 for node in contact_graph.nodes() if true_dynamics[time][node] == 2) / num_nodes
+    true_w2 = sum(1 for node in contact_graph.nodes() if true_dynamics[time][node] == 2) / num_nodes  # Recovered portion
     true_w.append((true_w1, true_w2))
 
 def given_at_time(time):
     num_new_recovered = sum(1 for node in contact_graph.nodes() 
-                            if true_dynamics[time][node] == 2 and true_dynamics[time-1][node] < 2)
+                            if true_dynamics[time][node] == 2 and true_dynamics[time-1][node] < 2) / num_nodes
     x1 = beta * (num_new_recovered / gamma)
     x2 = 1 - (num_new_recovered / gamma)
     return (x1, x2)
 
-# True output function
 def y_true(time):
     x1, x2 = given_at_time(time)
     true_w1, true_w2 = true_w[time]
 
     return (true_w1 * x1) * (x2 - true_w2)
 
-# Loss function takes params and previous w2
-def loss(params, prev_w2, T_gen):
+def loss(params, w1_run_avg, prev_w2, T_gen, eps_w1, eps_w2):
     w1, w2 = params
     
     x1, x2 = given_at_time(T_gen)
     y_pred = (w1 * x1) * (x2 - w2)
 
     penalties = 0
-    if w1 > num_nodes or w1 < 0 or w2 > 1 or w2 < 0:
+    # Model constraints
+    if w1 > binomial_bound or w1 < 0 or w2 > 1 or w2 < 0:
         penalties += 1000
         
+    # Convergence constraints
+    if w1_run_avg is not None:
+        delta = abs(w1 - w1_run_avg)
+        if delta > eps_w1:
+            penalties += 100 * (delta - eps_w1)**2
+
+    # Smoothness constraints
     if prev_w2 is not None:
         delta = abs(w2 - prev_w2)
-        if delta > eps:
-            penalties += 100 * (delta - eps)**2
+        if delta > eps_w2:
+            penalties += 100 * (delta - eps_w2)**2
 
     return ((y_pred - y_true(T_gen)) ** 2) + penalties
 
-# Optimization
-eps = 0.1
-binomial_bound = n * p + np.sqrt(n * p * (1 - p))
+#---------
+#
+#  Optimization problem: y = w1 * x1 * (x2 - w2), where w1, w2 are unknown, and only w1 is constant
+#
+#----------
+
+eps_w1 = binomial_bound  # Controls convergence of w1
+alpha = 0.7  # Controls how much w1 is influenced by the run average
+eps_w2 = 0.075  # Controls smoothness of w2
 bounds = [(1, binomial_bound), (0, 1)]
-Repeat = 5
+num_runs = 50
 w1_avg = []
 w2_avg = []
-for _ in range(Repeat):
+for _ in range(num_runs):
     w1_estimates = []
+    w1_run_avg = None
+    temp = eps_w1
     w2_estimates = []
     prev_w2 = None
 
     for t in range(1, T): 
         T_gen = t
-        # Initialize with true initial conditions
-        init_guess = [random.uniform(1, binomial_bound), min(max(prev_w2 + random.uniform(-eps, eps), 0), 1)] if prev_w2 is not None else [true_w[T_gen][0], true_w[T_gen][1]]
+        init_guess = None
+        eps_w1 = temp * np.sqrt(1 - t/T)  # Polynomial root decay of eps_w1 over time
 
-        # Use lambda to pass fixed T_gen and prev_w2 to loss
-        # result = differential_evolution(lambda params: loss(params, prev_w2, T_gen), bounds=bounds, maxiter=1000, popsize=20)
+        if w1_run_avg == None or prev_w2 == None:
+            init_guess = [random.uniform(1, binomial_bound), true_w[T_gen][1]]
+        else:
+            #  Scipy will handle bounds issues here if they occur
+            init_guess = [w1_run_avg + random.uniform(-eps_w1, eps_w1), prev_w2 + random.uniform(-eps_w2, eps_w2)]
 
         result = None
-        result = minimize(lambda params: loss(params, prev_w2, T_gen), init_guess, method='L-BFGS-B', bounds=bounds)
+        result = minimize(lambda params: loss(params, w1_run_avg, prev_w2, T_gen, eps_w1=eps_w1, eps_w2=eps_w2), init_guess, method='L-BFGS-B', bounds=bounds)
 
-        w1_estimates.append(result.x[0])
         w1 = result.x[0]
+        w1 = alpha * w1 + (1 - alpha) * w1_run_avg if w1_run_avg is not None else w1  # Apply run average smoothing
+        w1_estimates.append(w1)
+        w1_run_avg = np.mean(w1_estimates)  # Update run average for w1
         w2 = result.x[1]
-        w2_estimates.append(result.x[1])
-
-        # Try with differential evolution
+        w2_estimates.append(w2)
 
         print("Time:", t)
         print("Initial guess:", init_guess)
         print("True w1:", true_w[T_gen][0])
         print("True w2:", true_w[T_gen][1])
-        print("Estimated w1:", result.x[0])
+        print("Estimated w1:", w1)
         print("Estimated w2:", result.x[1])
         print("x values at T_gen:", given_at_time(T_gen))
         print("Squared error:", result.fun)
         print("\n")
 
-        prev_w2 = result.x[1] # Update prev_w2 for the next iteration
+        prev_w2 = w2 # Update prev_w2 for the next iteration
 
-    w1_avg.append(w1_estimates)
-    w2_avg.append(w2_estimates)
+    w1_avg.append(w1_estimates)  # List of w1 estimates for this run
+    w2_avg.append(w2_estimates)  # List of w2 estimates for this run
 
+    eps_w1 = temp  # Reset eps_w1 for the next run
+
+#  Run-wise average of w1 across runs
 w1_avg = np.mean(w1_avg, axis=0)
 w2_avg = np.mean(w2_avg, axis=0)
 
@@ -141,7 +164,7 @@ ax.grid(True)
 
 # # Inset: SIR infections
 sir_infections = [sum(1 for node in contact_graph.nodes() if true_dynamics[t][node] == 1) for t in range(T)]
-ax_inset = inset_axes(ax, width="30%", height="30%", loc='upper left')
+ax_inset = inset_axes(ax, width="30%", height="30%", loc='lower right')
 ax_inset.plot(range(T), sir_infections, color='gray', linestyle='--')
 ax_inset.set_title("SIR Infections", fontsize=8)
 ax_inset.tick_params(axis='both', which='major', labelsize=6)
@@ -168,7 +191,7 @@ ax.grid(True)
 
 # # Inset: SIR infections
 sir_infections = [sum(1 for node in contact_graph.nodes() if true_dynamics[t][node] == 1) for t in range(T)]
-ax_inset = inset_axes(ax, width="30%", height="30%", loc='upper left')
+ax_inset = inset_axes(ax, width="30%", height="30%", loc='lower right')
 ax_inset.plot(range(T), sir_infections, color='gray', linestyle='--')
 ax_inset.set_title("SIR Infections", fontsize=8)
 ax_inset.tick_params(axis='both', which='major', labelsize=6)
@@ -176,6 +199,21 @@ ax_inset.grid(True)
 
 plt.tight_layout()
 plt.show()
+
+# Write avg_w1 and avg_w2 to a file
+# Make avg_w2 a dictionary with time as keys
+avg_w2_dict = {t: w2_avg[t-1] for t in range
+               (1, T)}
+
+# round w2_avg values to 2 decimal places
+w2_avg = [round(value, 2) for value in w2_avg]
+
+with open("experiment_data/mfa_results.txt", "a") as f:
+    f.write("avg_w1:\n")
+    f.write(f"{round(np.mean(w1_avg), 2)}")
+    f.write("\n \n")
+    f.write("avg_w2:\n")
+    f.write("\n".join(f"{t}: {w2_avg[t-1]}" for t in range(1, T)) + "\n")
 
 # --- Optional: Surface and gradient plot ---
 
