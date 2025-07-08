@@ -16,6 +16,17 @@ contact_graph = None
 n = 150
 p = 0.05
 
+clear = True
+# Clear mfa_results.txt, mfa_contact.gml, and mfa_social.gml if they exist
+def truncate_files():
+    files_to_truncate = ["experiment_data/mfa_results.txt", "experiment_data/mfa_contact.gml", "experiment_data/mfa_social.gml"]
+    for file in files_to_truncate:
+        if os.path.exists(file):
+            with open(file, 'w') as f:
+                f.truncate(0)
+if clear:
+    truncate_files()
+
 try:
     if not os.path.exists("experiment_data/mfa_contact.gml") or not os.path.exists("experiment_data/mfa_social.gml"):
         raise FileNotFoundError
@@ -43,7 +54,7 @@ beta = 0.11
 gamma = 0.10
 mu = 0.10
 init = 0.10
-q = True
+q = False
 
 SIR_results = SIR.Simulate_SIR(
     contact_network=deepcopy(contact_graph),
@@ -57,9 +68,9 @@ deg_lst = SIR_results[6]
 true_dynamics = SIR_results[4]
 
 # Mean-field approximation loses accuracy for small i
-# -> Trim simulation; find where newly infected ratio < 0.1
-start = 2  # Start at time not affected by smallest_accurate_ratio
-smallest_accurate_ratio = 0.1
+# -> Trim simulation; find where newly infected ratio < smallest_accurate_ratio
+start = 2  # Ignore insufficient numbers at the start. Experimentally determined.
+smallest_accurate_ratio = 0.1  # Minimum ratio of infected nodes to total nodes to consider the simulation accurate. Experimentally determined.
 for t in range(start, T):
     if sum(1 for node in contact_graph.nodes() if true_dynamics[t][node] == 1) / len(contact_graph.nodes()) < smallest_accurate_ratio:
         T = t + 1
@@ -128,7 +139,6 @@ def loss(params, w1_run_avg, prev_w2, T_gen, eps_w1, eps_w2):
 #----------
 
 eps_w1 = binomial_bound  # Controls exploration of w1
-# eps_w1 = 3
 alpha = 0.6  # Controls how much w1 is influenced by the run average
 eps_w2 = 0.075  # Controls smoothness of w2
 bounds = [(1, binomial_bound), (0, 1)]
@@ -253,41 +263,3 @@ with open("experiment_data/mfa_results.txt", "a") as f:
     f.write("\n \n")
     f.write("avg_w2:\n")
     f.write("\n".join(f"{t}: {w2_avg[t-1]}" for t in range(1, T)) + "\n")
-
-# --- Optional: Surface and gradient plot ---
-
-def f(w1, w2, T_gen):
-    x1, x2 = given_at_time(T_gen)
-    return (w1 * x1) * (x2 - w2)
-
-def plot_surface(T_gen):
-    w1_range = np.linspace(1, num_nodes, 100)
-    w2_range = np.linspace(0, 1, 100)
-    W1, W2 = np.meshgrid(w1_range, w2_range)
-    Z = f(W1, W2, T_gen)
-
-    fig_surface = plt.figure(figsize=(10, 8))
-    ax_surface = fig_surface.add_subplot(111, projection='3d')
-    ax_surface.plot_surface(W1, W2, Z, cmap='viridis', alpha=0.8)
-    ax_surface.set_xlabel('w1')
-    ax_surface.set_ylabel('w2')
-    ax_surface.set_zlabel('Function Value')
-    ax_surface.set_title(f'Surface Plot of f(w1, w2) at T={T_gen}')
-    plt.tight_layout()
-    plt.show()
-
-def plot_gradient(T_gen):
-    w1_range = np.linspace(1, num_nodes, 100)
-    w2_range = np.linspace(0, 1, 100)
-    W1, W2 = np.meshgrid(w1_range, w2_range)
-    Z = f(W1, W2, T_gen)
-    dZ_dw1, dZ_dw2 = np.gradient(Z, w1_range, w2_range)
-
-    fig_gradient = plt.figure(figsize=(10, 8))
-    ax_gradient = fig_gradient.add_subplot(111)
-    ax_gradient.quiver(W1, W2, dZ_dw1, dZ_dw2, color='blue', alpha=0.5)
-    ax_gradient.set_xlabel('w1')
-    ax_gradient.set_ylabel('w2')
-    ax_gradient.set_title(f'Gradient Field of f(w1, w2) at T={T_gen}')
-    plt.tight_layout()
-    plt.show()
