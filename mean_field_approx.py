@@ -7,12 +7,34 @@ from scipy.optimize import minimize
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import random
+import os
+
+social_graph = None
+contact_graph = None
 
 # Generate contact and social graphs
 n = 150
 p = 0.05
-contact_graph = nx.erdos_renyi_graph(n, p, seed=42)
-social_graph = correlated_graphs.create_social_graph(contact_graph, nE=2 * len(contact_graph.edges()))[0]
+
+try:
+    if not os.path.exists("experiment_data/mfa_contact.gml") or not os.path.exists("experiment_data/mfa_social.gml"):
+        raise FileNotFoundError
+
+    contact_graph = nx.read_gml("experiment_data/mfa_contact.gml")
+    social_graph = nx.read_gml("experiment_data/mfa_social.gml")
+
+    # Convert node labels from strings to integers
+    contact_graph = nx.relabel_nodes(contact_graph, lambda x: int(x))
+    social_graph = nx.relabel_nodes(social_graph, lambda x: int(x))
+
+except (FileNotFoundError, OSError, ValueError, nx.NetworkXError) as e:
+    print("No valid graphs found in mfa_*.gml. Generating new graphs.")
+
+    contact_graph = nx.erdos_renyi_graph(n, p, seed=42)
+    social_graph = correlated_graphs.create_social_graph(contact_graph, nE=2 * len(contact_graph.edges()))[0]
+
+    nx.write_gml(contact_graph, "experiment_data/mfa_contact.gml")
+    nx.write_gml(social_graph, "experiment_data/mfa_social.gml")
 
 # Simulation parameters
 T = 150
@@ -21,18 +43,33 @@ beta = 0.11
 gamma = 0.10
 mu = 0.10
 init = 0.10
-q = False
+q = True
 
 SIR_results = SIR.Simulate_SIR(
     contact_network=deepcopy(contact_graph),
     social_network=deepcopy(social_graph),
     T=T, Repeat=Repeat,
     beta=beta, gamma=gamma, mu=mu, init=init,
-    average_data=False, q=q, allow_restoration=False, save_all=True
+    average_data=False, q=q, allow_restoration=q, save_all=True
 )
 
-mean_degrees = np.mean(SIR_results[6])   # Mean degree of contact network over time
+deg_lst = SIR_results[6]
 true_dynamics = SIR_results[4]
+
+# Mean-field approximation loses accuracy for small i
+# -> Trim simulation; find where newly infected ratio < 0.1
+start = 2  # Start at time not affected by smallest_accurate_ratio
+smallest_accurate_ratio = 0.1
+for t in range(start, T):
+    if sum(1 for node in contact_graph.nodes() if true_dynamics[t][node] == 1) / len(contact_graph.nodes()) < smallest_accurate_ratio:
+        T = t + 1
+        break
+
+# Shorten true_dynamics and deg_lst to match T
+true_dynamics = true_dynamics[:T]
+deg_lst = deg_lst[:T]
+
+mean_degrees = np.mean(deg_lst)   # Mean degree of contact network over time
 num_nodes = len(contact_graph.nodes())
 binomial_bound = n * p + np.sqrt(n * p * (1 - p))
 
@@ -47,10 +84,10 @@ for time in range(T):
     true_w.append((true_w1, true_w2))
 
 def given_at_time(time):
-    num_new_recovered = sum(1 for node in contact_graph.nodes() 
+    new_r_ratio = sum(1 for node in contact_graph.nodes() 
                             if true_dynamics[time][node] == 2 and true_dynamics[time-1][node] < 2) / num_nodes
-    x1 = beta * (num_new_recovered / gamma)
-    x2 = 1 - (num_new_recovered / gamma)
+    x1 = beta * (new_r_ratio / gamma)
+    x2 = 1 - (new_r_ratio / gamma)
     return (x1, x2)
 
 def y_true(time):
@@ -86,12 +123,13 @@ def loss(params, w1_run_avg, prev_w2, T_gen, eps_w1, eps_w2):
 
 #---------
 #
-#  Optimization problem: y = w1 * x1 * (x2 - w2), where w1, w2 are unknown, and only w1 is constant
+#  Optimization problem: y = w1 * x1 * (x2 - w2), where w1, w2 are unknown (mean node degree and fraction of recovered nodes, respectively)
 #
 #----------
 
-eps_w1 = binomial_bound  # Controls convergence of w1
-alpha = 0.7  # Controls how much w1 is influenced by the run average
+eps_w1 = binomial_bound  # Controls exploration of w1
+# eps_w1 = 3
+alpha = 0.6  # Controls how much w1 is influenced by the run average
 eps_w2 = 0.075  # Controls smoothness of w2
 bounds = [(1, binomial_bound), (0, 1)]
 num_runs = 50
@@ -107,7 +145,7 @@ for _ in range(num_runs):
     for t in range(1, T): 
         T_gen = t
         init_guess = None
-        eps_w1 = temp * np.sqrt(1 - t/T)  # Polynomial root decay of eps_w1 over time
+        eps_w1 = temp * ((1 - t/T)**0.5)  # Polynomial root decay of eps_w1 over time
 
         if w1_run_avg == None or prev_w2 == None:
             init_guess = [random.uniform(1, binomial_bound), true_w[T_gen][1]]
@@ -133,6 +171,7 @@ for _ in range(num_runs):
         print("Estimated w2:", result.x[1])
         print("x values at T_gen:", given_at_time(T_gen))
         print("Squared error:", result.fun)
+        print("Mean node degree:", deg_lst[T_gen])
         print("\n")
 
         prev_w2 = w2 # Update prev_w2 for the next iteration
@@ -164,7 +203,7 @@ ax.grid(True)
 
 # # Inset: SIR infections
 sir_infections = [sum(1 for node in contact_graph.nodes() if true_dynamics[t][node] == 1) for t in range(T)]
-ax_inset = inset_axes(ax, width="30%", height="30%", loc='lower right')
+ax_inset = inset_axes(ax, width="10%", height="10%", loc='lower right')
 ax_inset.plot(range(T), sir_infections, color='gray', linestyle='--')
 ax_inset.set_title("SIR Infections", fontsize=8)
 ax_inset.tick_params(axis='both', which='major', labelsize=6)
@@ -191,7 +230,7 @@ ax.grid(True)
 
 # # Inset: SIR infections
 sir_infections = [sum(1 for node in contact_graph.nodes() if true_dynamics[t][node] == 1) for t in range(T)]
-ax_inset = inset_axes(ax, width="30%", height="30%", loc='lower right')
+ax_inset = inset_axes(ax, width="10%", height="10%", loc='lower right')
 ax_inset.plot(range(T), sir_infections, color='gray', linestyle='--')
 ax_inset.set_title("SIR Infections", fontsize=8)
 ax_inset.tick_params(axis='both', which='major', labelsize=6)
