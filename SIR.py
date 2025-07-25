@@ -78,9 +78,10 @@ def update_N_P(P, N, n, a=0.5, v=0.05):
 def quarantine_edge_removal(g, node, states, quarantine_statuses):
     # Boolean value; Checks if "Informed" is an attribute of the node under consideration
     is_informed = g.nodes[node].get('Informed?') == 'Informed'
+    is_adhering = g.nodes[node].get('Adheres?') == 'Yes'
 
     # Check if node's state is 1 (active)
-    if states[node] == 1 and is_informed == True:
+    if states[node] == 1 and is_informed == True and is_adhering == True:
         quarantine_statuses[node] = 1  # Set quarantine status to 1 (quarantining)
         # Get all neighbors of current node
         neighbors = list(g.neighbors(node))
@@ -105,8 +106,11 @@ def restore_edges(g_init, g, node):
 
 # q: Set to true if you want quarantine periods to be factored into algorithm
 # save_all: Returns large array containing quarantine states at every time interval
+# lt_threshold: Set to none for independent cascade model, or an int value for linear threshold model
+# adherence: Set to a float value between 0 and 1. Ratio of individuals that will adhere to quarantine measures.
+# NOTE: average_data only averages infection numbers. May be removed in the future.
 def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,average_data,
-                 q=False,allow_restoration=False,save_all=False,lt_threshold=None):
+                 q=False,allow_restoration=False,save_all=False,lt_threshold=None,adherence=None):
     if social_network == None:
         social_network = correlated_graphs.create_social_graph(contact_network)[0]
 
@@ -118,6 +122,23 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
         N = n - 1
         P = n - N
 
+        non_adhering = set()  # Set to hold nodes that do not adhere to quarantine measures
+        # Randomly select a subset of nodes that will not adhere to quarantine measures
+        if adherence is not None:
+            non_adhering = set(np.random.choice(contact_network.nodes(), size=int((1 - adherence) * n), replace=False))
+
+        # Set labels for non-adhering nodes
+        for node in non_adhering:
+            nx.set_node_attributes(contact_network, {node: {'Adheres?': 'No'}})
+            nx.set_node_attributes(social_network, {node: {'Adheres?': 'No'}})
+
+        # Set labels for adhering nodes
+        for node in contact_network.nodes():
+            if node not in non_adhering:
+                nx.set_node_attributes(contact_network, {node: {'Adheres?': 'Yes'}})
+                nx.set_node_attributes(social_network, {node: {'Adheres?': 'Yes'}})
+
+        # Get the initial set of informed nodes
         informed = find_seeds.find_seed_set(social_network, num_seeds=round(0.05 * len(social_network.nodes())),exponent=1)
 
         # Set labels for informed set
@@ -125,6 +146,7 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
             nx.set_node_attributes(contact_network, {node: {'Informed?': 'Informed'}})
             nx.set_node_attributes(social_network, {node: {'Informed?': 'Informed'}})
 
+        # Set labels for uninformed nodes
         for node in contact_network.nodes(): 
             if node not in informed:
                 nx.set_node_attributes(contact_network, {node: {'Informed?': 'Uninformed'}})
@@ -216,10 +238,6 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
             # Make copy before modifying
             copy_state = deepcopy(state)
             state = sirs_step(contact_network, state, L, beta, gamma, mu)
-            
-            # These numbers should be the same
-            print(len([u for u in quarantine_statuses if quarantine_statuses[u] > 0]), "quarantined individuals at time", t)
-            print(len(set(informed).intersection(set([u for u in state.keys() if state[u] == 1]))), "informed and infected individuals at time", t)
 
             # Analyze state changes across all nodes
             for u in range(n):
@@ -238,7 +256,6 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
 
                     # If the quarantine time has been reached for the individual, remove from the infected category
                     if quarantine_statuses[u] >= d[u]:
-                        print("Quarantine reached")
                         quarantine_statuses[u] = 0   # Individual takes a break from quarantining
                         if allow_restoration:
                             restore_edges(G_initial, contact_network, u)

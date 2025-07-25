@@ -1,3 +1,4 @@
+import sys
 import SIR
 import networkx as nx
 import correlated_graphs
@@ -8,18 +9,31 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import random
 import os
+import pickle
 
 social_graph = None
 contact_graph = None
 
 # Generate contact and social graphs
-n = 150
+n = 125
 p = 0.05
 
-clear = True
-# Clear mfa_results.txt, mfa_contact.gml, and mfa_social.gml if they exist
+clear = False  # Set clear to True if you want to use a new network or clear data files. False if you want to keep the existing one.
+verbose = False  # Set verbose to True if you want to see detailed output during optimization
+
+# Simulation parameters
+T = 125
+Repeat = 1
+beta = 0.08
+gamma = 0.10
+mu = 0.10
+init = 0.10
+q = True
+adherence = 0.0
+
+# Clear data files
 def truncate_files():
-    files_to_truncate = ["experiment_data/mfa_results.txt", "experiment_data/mfa_contact.gml", "experiment_data/mfa_social.gml"]
+    files_to_truncate = ["experiment_data/mfa_results.txt", "experiment_data/mfa_contact.gml", "experiment_data/mfa_social.gml", "experiment_data/mfa_xy_data.pkl"]
     for file in files_to_truncate:
         if os.path.exists(file):
             with open(file, 'w') as f:
@@ -47,70 +61,36 @@ except (FileNotFoundError, OSError, ValueError, nx.NetworkXError) as e:
     nx.write_gml(contact_graph, "experiment_data/mfa_contact.gml")
     nx.write_gml(social_graph, "experiment_data/mfa_social.gml")
 
-# Simulation parameters
-T = 150
-Repeat = 1
-beta = 0.11
-gamma = 0.10
-mu = 0.10
-init = 0.10
-q = False
-
 SIR_results = SIR.Simulate_SIR(
     contact_network=deepcopy(contact_graph),
     social_network=deepcopy(social_graph),
     T=T, Repeat=Repeat,
     beta=beta, gamma=gamma, mu=mu, init=init,
-    average_data=False, q=q, allow_restoration=q, save_all=True
+    average_data=False, q=q, allow_restoration=q, save_all=True, adherence=adherence
 )
 
 deg_lst = SIR_results[6]
 true_dynamics = SIR_results[4]
 
-# Mean-field approximation loses accuracy for small i
-# -> Trim simulation; find where newly infected ratio < smallest_accurate_ratio
-start = 2  # Ignore insufficient numbers at the start. Experimentally determined.
-smallest_accurate_ratio = 0.1  # Minimum ratio of infected nodes to total nodes to consider the simulation accurate. Experimentally determined.
-for t in range(start, T):
-    if sum(1 for node in contact_graph.nodes() if true_dynamics[t][node] == 1) / len(contact_graph.nodes()) < smallest_accurate_ratio:
-        T = t + 1
-        break
-
-# Shorten true_dynamics and deg_lst to match T
-true_dynamics = true_dynamics[:T]
-deg_lst = deg_lst[:T]
-
-mean_degrees = np.mean(deg_lst)   # Mean degree of contact network over time
-num_nodes = len(contact_graph.nodes())
-binomial_bound = n * p + np.sqrt(n * p * (1 - p))
-
-if num_nodes == 0:
-    raise ValueError("The contact graph has no nodes. Please check the graph generation parameters.")
-
-# Compute true w1 and w2 values: Mean degree and fraction of recovered nodes
-true_w = []
-for time in range(T):
-    true_w1 = mean_degrees
-    true_w2 = sum(1 for node in contact_graph.nodes() if true_dynamics[time][node] == 2) / num_nodes  # Recovered portion
-    true_w.append((true_w1, true_w2))
-
 def given_at_time(time):
     new_r_ratio = sum(1 for node in contact_graph.nodes() 
-                            if true_dynamics[time][node] == 2 and true_dynamics[time-1][node] < 2) / num_nodes
+                            if true_dynamics[time][node] == 2 and true_dynamics[time-1][node] < 2) / n
+    new_i_ratio = sum(1 for node in contact_graph.nodes() 
+                            if true_dynamics[time][node] == 1 and true_dynamics[time-1][node] != 1) / n
     x1 = beta * (new_r_ratio / gamma)
     x2 = 1 - (new_r_ratio / gamma)
-    return (x1, x2)
+
+    return (x1, x2, new_i_ratio)
 
 def y_true(time):
-    x1, x2 = given_at_time(time)
+    x1, x2, _ = given_at_time(time)
     true_w1, true_w2 = true_w[time]
 
     return (true_w1 * x1) * (x2 - true_w2)
 
 def loss(params, w1_run_avg, prev_w2, T_gen, eps_w1, eps_w2):
     w1, w2 = params
-    
-    x1, x2 = given_at_time(T_gen)
+    x1, x2, _ = given_at_time(T_gen)
     y_pred = (w1 * x1) * (x2 - w2)
 
     penalties = 0
@@ -132,6 +112,31 @@ def loss(params, w1_run_avg, prev_w2, T_gen, eps_w1, eps_w2):
 
     return ((y_pred - y_true(T_gen)) ** 2) + penalties
 
+# Mean-field approximation loses accuracy for small i
+# -> Trim simulation; find where newly infected ratio < smallest_accurate_ratio
+start = 2  # Ignore insufficient numbers at the start. Experimentally determined.
+smallest_accurate_ratio = 0.1  # Minimum ratio of infected nodes to total nodes to consider the simulation accurate. Experimentally determined.
+for t in range(start, T):
+    i = sum(1 for node in contact_graph.nodes() if true_dynamics[t][node] == 1) / len(contact_graph.nodes())
+    if i < smallest_accurate_ratio:
+        T = t + 1
+        break
+
+# Shorten true_dynamics and deg_lst to match new T
+true_dynamics = true_dynamics[:T]
+deg_lst = deg_lst[:T]
+
+mean_degrees = np.mean(deg_lst)   # Mean degree of contact network over time
+binomial_bound = n * p + np.sqrt(n * p * (1 - p))
+
+# Compute true w1 and w2 values: Mean degree and fraction of recovered nodes
+true_w = []
+for time in range(T):
+    true_w1 = mean_degrees
+    true_w2 = sum(1 for node in contact_graph.nodes() if true_dynamics[time][node] == 2) / n  # Recovered portion
+    true_w.append((true_w1, true_w2))
+
+
 #---------
 #
 #  Optimization problem: y = w1 * x1 * (x2 - w2), where w1, w2 are unknown (mean node degree and fraction of recovered nodes, respectively)
@@ -139,10 +144,10 @@ def loss(params, w1_run_avg, prev_w2, T_gen, eps_w1, eps_w2):
 #----------
 
 eps_w1 = binomial_bound  # Controls exploration of w1
-alpha = 0.6  # Controls how much w1 is influenced by the run average
+alpha = 0.7  # Controls how much w1 is influenced by the run average
 eps_w2 = 0.075  # Controls smoothness of w2
 bounds = [(1, binomial_bound), (0, 1)]
-num_runs = 50
+num_runs = 3
 w1_avg = []
 w2_avg = []
 for _ in range(num_runs):
@@ -173,16 +178,17 @@ for _ in range(num_runs):
         w2 = result.x[1]
         w2_estimates.append(w2)
 
-        print("Time:", t)
-        print("Initial guess:", init_guess)
-        print("True w1:", true_w[T_gen][0])
-        print("True w2:", true_w[T_gen][1])
-        print("Estimated w1:", w1)
-        print("Estimated w2:", result.x[1])
-        print("x values at T_gen:", given_at_time(T_gen))
-        print("Squared error:", result.fun)
-        print("Mean node degree:", deg_lst[T_gen])
-        print("\n")
+        if verbose:
+            print("Time:", t)
+            print("Initial guess:", init_guess)
+            print("True w1:", true_w[T_gen][0])
+            print("True w2:", true_w[T_gen][1])
+            print("Estimated w1:", w1)
+            print("Estimated w2:", result.x[1])
+            print("x values at T_gen:", given_at_time(T_gen))
+            print("Squared error:", result.fun)
+            print("Mean node degree:", deg_lst[T_gen])
+            print("\n")
 
         prev_w2 = w2 # Update prev_w2 for the next iteration
 
@@ -195,71 +201,72 @@ for _ in range(num_runs):
 w1_avg = np.mean(w1_avg, axis=0)
 w2_avg = np.mean(w2_avg, axis=0)
 
-#---------
+#-------------
 #
-#  Plotting results for w1: Mean Node Degree
+#  Write data for plotting to file
+#     Form: <label>:\n
+#           x: <x_values>\n
+#           y: <y_values>\n
+#     where x_values and y_values are comma-separated lists of values
+#         for the following data: SIR simulation, w1 true, w1 estimated, w2 true, and w2 estimated
 #
-#---------
+#-------------
 
-fig, ax = plt.subplots(figsize=(12, 6))
-ax.plot(range(1, T), [true_w[t][0] for t in range(1, T)], label='True M.N.D.', marker='o')
-ax.plot(range(1, T), w1_avg, label='Estimated M.N.D.', marker='x')
-ax.set_xticks(range(T))
-ax.set_xlabel('Time')
-ax.set_ylabel('mean node degree values')
-ax.set_title('True vs Estimated Mean Node Degree (M.N.D.) over Time')
-ax.legend()
-ax.grid(True)
+# Generate all required data
+x_vals = list(range(1, T))  # Common x for most data
+x_vals_full = list(range(T))  # For SIR inset which uses full range
 
-# # Inset: SIR infections
-sir_infections = [sum(1 for node in contact_graph.nodes() if true_dynamics[t][node] == 1) for t in range(T)]
-ax_inset = inset_axes(ax, width="10%", height="10%", loc='lower right')
-ax_inset.plot(range(T), sir_infections, color='gray', linestyle='--')
-ax_inset.set_title("SIR Infections", fontsize=8)
-ax_inset.tick_params(axis='both', which='major', labelsize=6)
-ax_inset.grid(True)
+# Compute y values
+w1_true_y = [true_w[t][0] for t in x_vals]
+w1_est_y = w1_avg
+w2_true_y = [true_w[t][1] for t in x_vals]
+w2_est_y = w2_avg
+sir_infections_y = [sum(1 for node in contact_graph.nodes() if true_dynamics[t][node] == 1) for t in x_vals_full]
 
-plt.tight_layout()
-plt.show()
+# Round to 2 decimal places where appropriate
+w1_est_y = [round(y, 2) for y in w1_est_y]
+w2_est_y = [round(y, 2) for y in w2_est_y]
 
-#----------
-#
-#  Plotting results for w2: Fraction of Recovered Nodes
-#
-#----------
+# Save to mfa_xy_data.txt
+# This is for single runs under a given SIR configuration
+def save_xy_data():
+    with open("experiment_data/mfa_xy_data.txt", "a") as f:
+        f.write("==New Sample==\n")
+        f.write("SIR Infections (Inset):\n")
+        f.write(f"x: {','.join(map(str, x_vals_full))}\n")
+        f.write(f"y: {','.join(map(str, sir_infections_y))}\n\n")
 
-fig, ax = plt.subplots(figsize=(12, 6))
-ax.plot(range(1, T), [true_w[t][1] for t in range(1, T)], label='True r', marker='o')
-ax.plot(range(1, T), w2_avg, label='Estimated r', marker='x')
-ax.set_xticks(range(T))
-ax.set_xlabel('Time')
-ax.set_ylabel('r values')
-ax.set_title('True vs Estimated Recovered Fraction (r) over Time')
-ax.legend()
-ax.grid(True)
+        f.write("w1 True (Mean Node Degree):\n")
+        f.write(f"x: {','.join(map(str, x_vals))}\n")
+        f.write(f"y: {','.join(map(str, w1_true_y))}\n\n")
 
-# # Inset: SIR infections
-sir_infections = [sum(1 for node in contact_graph.nodes() if true_dynamics[t][node] == 1) for t in range(T)]
-ax_inset = inset_axes(ax, width="10%", height="10%", loc='lower right')
-ax_inset.plot(range(T), sir_infections, color='gray', linestyle='--')
-ax_inset.set_title("SIR Infections", fontsize=8)
-ax_inset.tick_params(axis='both', which='major', labelsize=6)
-ax_inset.grid(True)
+        f.write("w1 Estimated:\n")
+        f.write(f"x: {','.join(map(str, x_vals))}\n")
+        f.write(f"y: {','.join(map(str, w1_est_y))}\n\n")
 
-plt.tight_layout()
-plt.show()
+        f.write("w2 True (Recovered Fraction):\n")
+        f.write(f"x: {','.join(map(str, x_vals))}\n")
+        f.write(f"y: {','.join(map(str, w2_true_y))}\n\n")
 
-# Write avg_w1 and avg_w2 to a file
-# Make avg_w2 a dictionary with time as keys
-avg_w2_dict = {t: w2_avg[t-1] for t in range
-               (1, T)}
+        f.write("w2 Estimated:\n")
+        f.write(f"x: {','.join(map(str, x_vals))}\n")
+        f.write(f"y: {','.join(map(str, w2_est_y))}\n\n")
 
-# round w2_avg values to 2 decimal places
-w2_avg = [round(value, 2) for value in w2_avg]
+# Save the xy data if not running as a subprocess: i.e. one run only (we are plotting optimization problem solution)
+if "--subprocess" not in sys.argv:
+    save_xy_data()
 
-with open("experiment_data/mfa_results.txt", "a") as f:
-    f.write("avg_w1:\n")
-    f.write(f"{round(np.mean(w1_avg), 2)}")
-    f.write("\n \n")
-    f.write("avg_w2:\n")
-    f.write("\n".join(f"{t}: {w2_avg[t-1]}" for t in range(1, T)) + "\n")
+# This is for averaging multiple runs under a given SIR configuration
+def save_results():
+    results = {
+        "w1_avg": w1_avg,
+        "w2_avg": w2_avg,
+    }
+    # mfa_compute.pkl will be used for computing averages for a given SIR config
+    # mfa_xy_data.pkl will be used to hold these averages for plotting
+    with open("experiment_data/mfa_compute.pkl", "ab") as f:
+        pickle.dump(results, f)
+
+if "--subprocess" in sys.argv:
+    # If running as a subprocess, i.e. we are averaging runs, save the results to mfa_compute.pkl
+    save_results()

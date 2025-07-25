@@ -2,6 +2,10 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import matplotlib.cm as cm
 import numpy as np
+import pickle
+
+plot_opt = False
+plot_new = True
 
 #----------
 #
@@ -9,7 +13,8 @@ import numpy as np
 #
 #----------
 
-def parse_data(filepath):
+# Returns list of the form: <label>: (x_values, y_values)
+def parse_opt_results(filepath):
     with open(filepath, 'r') as f:
         content = f.read()
 
@@ -76,18 +81,62 @@ def plot_group(samples, key_true, key_est, title):
     plt.tight_layout()
     plt.show()
 
-# === RUN THIS ===
-if __name__ == "__main__":
+if plot_opt == True:
     filepath = "experiment_data/mfa_xy_data.txt"
-    samples = parse_data(filepath)
+    samples = parse_opt_results(filepath)
 
     # Group and plot
     plot_group(samples, 
-               key_true="w1 True (Mean Node Degree)", 
-               key_est="w1 Estimated", 
-               title="True vs Estimated Mean Node Degree")
+                key_true="w1 True (Mean Node Degree)", 
+                key_est="w1 Estimated", 
+                title="True vs Estimated Mean Node Degree")
 
     plot_group(samples, 
-               key_true="w2 True (Recovered Fraction)", 
-               key_est="w2 Estimated", 
-               title="True vs Estimated Recovered Fraction")
+                key_true="w2 True (Recovered Fraction)", 
+                key_est="w2 Estimated", 
+                title="True vs Estimated Recovered Fraction")
+    
+
+def parse_avgs(filepath):
+    with open(filepath, 'rb') as f:
+        data = pickle.load(f)
+
+    return data
+
+def find_adherence(k0, k1):
+    adherence_proportion = (k0 - k1) / k0 if k0 != 0 else 0
+
+    # Error handling: if adherence proportion is negative (data was likely in wrong order in file), reverse the numbers
+    if adherence_proportion < 0:
+        adherence_proportion = (k1 - k0) / k1 if k1 != 0 else 0
+
+    return adherence_proportion
+
+if plot_new == True:
+
+#-----------
+#
+#  Parse data written by mfa_drive_compute.py to experiment_data/mfa_avgs.pkl
+#  Data is saved in the form: (w1_avg, w2_avg_vec) for each configuration.
+#
+# Approximate quarantine adherence proportion as: (<k> - k) / <k>, where <k> is mean node degree from optimization w/ no quarantine,
+#    k is mean node degree from optimization w/ quarantine (this should be the data from experiment_data/mfa_xy_data)
+#
+# ----------
+
+    samples = parse_avgs("experiment_data/mfa_avgs.pkl")
+
+    # Print hypothesized adherence proportion
+    k_sample0 = samples[0][0]
+    k_sample1 = samples[1][0]
+
+    print("Mean Node Degrees: ", k_sample0, " ", k_sample1)
+
+    adherence_proportion = find_adherence(k_sample0, k_sample1)
+    print("Adherence Proportion:", adherence_proportion)
+
+    # avgs = parse_avgs("experiment_data/mfa_avgs.pkl")
+
+    # # Data at this point should be a list of: (scalar, vector), representing 
+
+    

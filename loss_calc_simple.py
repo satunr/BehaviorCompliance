@@ -180,8 +180,7 @@ def calculate_loss_on_many_networks(social_graph, num_networks=10, si=25):
     # Generate some random graphs (remove just 1 random node to keep them similar)
     data = [random_walk_subgraph(social_graph, si=si) for _ in range(num_networks)]
     data = [relabel_nodes_sequential(graph)[0] for graph in data]  # Relabel nodes to sequential integers
-    # data = [remove_random_nodes(social_graph, num_nodes=random.randint(2,10)) for _ in range(num_networks)]  # Remove 1 random node from each graph
-    # data = [relabel_nodes_sequential(graph)[0] for graph in data]  # Relabel nodes to sequential integers
+
     # Pack the data as a list of tuples of (losses, connectivity of the graph, probability matrices)
     results = [(loss[0], round(np.mean([graph.out_degree(node) for node in graph]), 1), loss[1]) 
                for graph, loss in [(g, calculate_loss(g)) for g in data]]
