@@ -24,16 +24,17 @@ verbose = False  # Set verbose to True if you want to see detailed output during
 # Simulation parameters
 T = 125
 Repeat = 1
-beta = 0.08
+beta = 0.09
 gamma = 0.10
 mu = 0.10
 init = 0.10
-q = True
+q = True  
 adherence = 0.0
 
 # Clear data files
 def truncate_files():
-    files_to_truncate = ["experiment_data/mfa_results.txt", "experiment_data/mfa_contact.gml", "experiment_data/mfa_social.gml", "experiment_data/mfa_xy_data.pkl"]
+    files_to_truncate = ["experiment_data/mfa_results.txt", "experiment_data/mfa_contact.gml", 
+                         "experiment_data/mfa_social.gml", "experiment_data/mfa_xy_data.pkl", "experiment_data/mfa_avgs.pkl"]
     for file in files_to_truncate:
         if os.path.exists(file):
             with open(file, 'w') as f:
@@ -252,9 +253,7 @@ def save_xy_data():
         f.write(f"x: {','.join(map(str, x_vals))}\n")
         f.write(f"y: {','.join(map(str, w2_est_y))}\n\n")
 
-# Save the xy data if not running as a subprocess: i.e. one run only (we are plotting optimization problem solution)
-if "--subprocess" not in sys.argv:
-    save_xy_data()
+save_xy_data()
 
 # This is for averaging multiple runs under a given SIR configuration
 def save_results():
@@ -267,6 +266,5 @@ def save_results():
     with open("experiment_data/mfa_compute.pkl", "ab") as f:
         pickle.dump(results, f)
 
-if "--subprocess" in sys.argv:
-    # If running as a subprocess, i.e. we are averaging runs, save the results to mfa_compute.pkl
-    save_results()
+# If running as a subprocess, i.e. we are averaging runs, save the results to mfa_compute.pkl
+save_results()
