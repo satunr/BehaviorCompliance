@@ -11,6 +11,14 @@ import random
 import os
 import pickle
 
+#----------
+#
+#  Mean-field approximation for SIR model: n_i = beta * <k> (1 - n_r / gamma - r) * n_r / gamma
+#  Assuming n_i, n_r, SIR parameters are known, this gives us the constrained, non-linear optimization problem:
+#    y = w1 * x1 * (x2 - w2), where <w1, w2> are the model weights to be learned (mean node degree, recovered ratio, respectively).
+#
+#----------
+
 social_graph = None
 contact_graph = None
 
@@ -24,12 +32,12 @@ verbose = False  # Set verbose to True if you want to see detailed output during
 # Simulation parameters
 T = 125
 Repeat = 1
-beta = 0.09
+beta = 0.11
 gamma = 0.10
 mu = 0.10
 init = 0.10
-q = True  
-adherence = 0.0
+q = True
+adherence = 0.5
 
 # Clear data files
 def truncate_files():
@@ -137,70 +145,100 @@ for time in range(T):
     true_w2 = sum(1 for node in contact_graph.nodes() if true_dynamics[time][node] == 2) / n  # Recovered portion
     true_w.append((true_w1, true_w2))
 
+# eps_w1: Controls exploration of w1
+# alpha: Controls how much w1 is influenced by the run average
+# eps_w2: Controls smoothness of w2
+def optimize_segment(start=1, bounds = [(1, binomial_bound), (0, 1)],eps_w1=binomial_bound, eps_w2=0.075, alpha=0.7, num_runs=10):
 
-#---------
-#
-#  Optimization problem: y = w1 * x1 * (x2 - w2), where w1, w2 are unknown (mean node degree and fraction of recovered nodes, respectively)
-#
-#----------
+    #---------
+    #
+    #  Optimization problem: y = w1 * x1 * (x2 - w2), where w1, w2 are unknown (mean node degree and fraction of recovered nodes, respectively)
+    #
+    #----------
 
-eps_w1 = binomial_bound  # Controls exploration of w1
-alpha = 0.7  # Controls how much w1 is influenced by the run average
-eps_w2 = 0.075  # Controls smoothness of w2
-bounds = [(1, binomial_bound), (0, 1)]
-num_runs = 3
-w1_avg = []
-w2_avg = []
-for _ in range(num_runs):
-    w1_estimates = []
-    w1_run_avg = None
-    temp = eps_w1
-    w2_estimates = []
-    prev_w2 = None
+    w1_avg = []
+    w2_avg = []
+    for _ in range(num_runs):
+        w1_estimates = []
+        w1_run_avg = None
+        temp = eps_w1
+        w2_estimates = []
+        prev_w2 = None
 
-    for t in range(1, T): 
-        T_gen = t
-        init_guess = None
-        eps_w1 = temp * ((1 - t/T)**0.5)  # Polynomial root decay of eps_w1 over time
+        for t in range(start, T): 
+            T_gen = t
+            init_guess = None
+            eps_w1 = temp * ((1 - t/T)**0.5)  # Polynomial root decay of eps_w1 over time
 
-        if w1_run_avg == None or prev_w2 == None:
-            init_guess = [random.uniform(1, binomial_bound), true_w[T_gen][1]]
-        else:
-            #  Scipy will handle bounds issues here if they occur
-            init_guess = [w1_run_avg + random.uniform(-eps_w1, eps_w1), prev_w2 + random.uniform(-eps_w2, eps_w2)]
+            if w1_run_avg == None or prev_w2 == None:
+                init_guess = [random.uniform(1, binomial_bound), true_w[T_gen][1]]
+            else:
+                #  Scipy will handle bounds issues here if they occur
+                init_guess = [w1_run_avg + random.uniform(-eps_w1, eps_w1), prev_w2 + random.uniform(-eps_w2, eps_w2)]
 
-        result = None
-        result = minimize(lambda params: loss(params, w1_run_avg, prev_w2, T_gen, eps_w1=eps_w1, eps_w2=eps_w2), init_guess, method='L-BFGS-B', bounds=bounds)
+            result = None
+            result = minimize(lambda params: loss(params, w1_run_avg, prev_w2, T_gen, eps_w1=eps_w1, eps_w2=eps_w2), init_guess, method='L-BFGS-B', bounds=bounds)
 
-        w1 = result.x[0]
-        w1 = alpha * w1 + (1 - alpha) * w1_run_avg if w1_run_avg is not None else w1  # Apply run average smoothing
-        w1_estimates.append(w1)
-        w1_run_avg = np.mean(w1_estimates)  # Update run average for w1
-        w2 = result.x[1]
-        w2_estimates.append(w2)
+            w1 = result.x[0]
+            w1 = alpha * w1 + (1 - alpha) * w1_run_avg if w1_run_avg is not None else w1  # Apply run average smoothing
+            w1_estimates.append(w1)
+            w1_run_avg = np.mean(w1_estimates)  # Update run average for w1
+            w2 = result.x[1]
+            w2_estimates.append(w2)
 
-        if verbose:
-            print("Time:", t)
-            print("Initial guess:", init_guess)
-            print("True w1:", true_w[T_gen][0])
-            print("True w2:", true_w[T_gen][1])
-            print("Estimated w1:", w1)
-            print("Estimated w2:", result.x[1])
-            print("x values at T_gen:", given_at_time(T_gen))
-            print("Squared error:", result.fun)
-            print("Mean node degree:", deg_lst[T_gen])
-            print("\n")
+            if verbose:
+                print("Time:", t)
+                print("Initial guess:", init_guess)
+                print("True w1:", true_w[T_gen][0])
+                print("True w2:", true_w[T_gen][1])
+                print("Estimated w1:", w1)
+                print("Estimated w2:", result.x[1])
+                print("x values at T_gen:", given_at_time(T_gen))
+                print("Squared error:", result.fun)
+                print("Mean node degree:", deg_lst[T_gen])
+                print("\n")
 
-        prev_w2 = w2 # Update prev_w2 for the next iteration
+            prev_w2 = w2 # Update prev_w2 for the next iteration
 
-    w1_avg.append(w1_estimates)  # List of w1 estimates for this run
-    w2_avg.append(w2_estimates)  # List of w2 estimates for this run
+        w1_avg.append(w1_estimates)  # List of w1 estimates for this run
+        w2_avg.append(w2_estimates)  # List of w2 estimates for this run
 
-    eps_w1 = temp  # Reset eps_w1 for the next run
+        eps_w1 = temp  # Reset eps_w1 for the next run
 
-#  Run-wise average of w1 across runs
-w1_avg = np.mean(w1_avg, axis=0)
-w2_avg = np.mean(w2_avg, axis=0)
+    return w1_avg, w2_avg
+
+# Split_point: None means no split, otherwise it is the time to split the optimization
+#   This allows us to find missing parameters in the initial stage of SIR, where <k> is indep. from beta parameter,
+#     and then optimize the rest of the simulation where <k> is dependent on beta.
+def drive_optimizer(split_point=None):
+    w1_avg = []
+    w2_avg = []
+    if split_point is None:
+        w1_avg, w2_avg = optimize_segment()
+
+        #  Run-wise average of w1 across runs
+        w1_avg = np.mean(w1_avg, axis=0)
+        w2_avg = np.mean(w2_avg, axis=0)
+
+        return w1_avg, w2_avg, true_w
+
+    w1_avg1, w2_avg1 = None, None
+    w1_avg2, w2_avg2 = None, None
+    if split_point is not None:
+        first_half = true_dynamics[:split_point]
+        second_half = true_dynamics[split_point:]
+
+        w1_avg1, w2_avg1 = optimize_segment()
+        w1_avg2, w2_avg2 = optimize_segment(start=split_point)
+
+        #  Run-wise average of w1 across runs
+        w1_avg1 = np.mean(w1_avg1, axis=0)
+        w2_avg1 = np.mean(w2_avg1, axis=0)
+        w1_avg2 = np.mean(w1_avg2, axis=0)
+        w2_avg2 = np.mean(w2_avg2, axis=0)
+
+        return w1_avg1, w2_avg1, w1_avg2, w2_avg2, true_w
+
 
 #-------------
 #
@@ -212,6 +250,8 @@ w2_avg = np.mean(w2_avg, axis=0)
 #         for the following data: SIR simulation, w1 true, w1 estimated, w2 true, and w2 estimated
 #
 #-------------
+
+w1_avg, w2_avg, true_w = drive_optimizer(split_point=None)
 
 # Generate all required data
 x_vals = list(range(1, T))  # Common x for most data
@@ -266,5 +306,4 @@ def save_results():
     with open("experiment_data/mfa_compute.pkl", "ab") as f:
         pickle.dump(results, f)
 
-# If running as a subprocess, i.e. we are averaging runs, save the results to mfa_compute.pkl
 save_results()
