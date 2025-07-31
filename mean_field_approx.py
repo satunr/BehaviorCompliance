@@ -38,6 +38,7 @@ mu = 0.10
 init = 0.10
 q = True
 adherence = 0.5
+split_point = 10 # Set to None if you want to optimize over the full SIR simulation, or a specific time point to split the optimization
 
 # Clear data files
 def truncate_files():
@@ -148,7 +149,7 @@ for time in range(T):
 # eps_w1: Controls exploration of w1
 # alpha: Controls how much w1 is influenced by the run average
 # eps_w2: Controls smoothness of w2
-def optimize_segment(start=1, bounds = [(1, binomial_bound), (0, 1)],eps_w1=binomial_bound, eps_w2=0.075, alpha=0.7, num_runs=10):
+def optimize_segment(start=1, end=T, bounds = [(1, binomial_bound), (0, 1)],eps_w1=binomial_bound, eps_w2=0.075, alpha=0.7, num_runs=10):
 
     #---------
     #
@@ -165,7 +166,7 @@ def optimize_segment(start=1, bounds = [(1, binomial_bound), (0, 1)],eps_w1=bino
         w2_estimates = []
         prev_w2 = None
 
-        for t in range(start, T): 
+        for t in range(start, end): 
             T_gen = t
             init_guess = None
             eps_w1 = temp * ((1 - t/T)**0.5)  # Polynomial root decay of eps_w1 over time
@@ -225,11 +226,8 @@ def drive_optimizer(split_point=None):
     w1_avg1, w2_avg1 = None, None
     w1_avg2, w2_avg2 = None, None
     if split_point is not None:
-        first_half = true_dynamics[:split_point]
-        second_half = true_dynamics[split_point:]
-
-        w1_avg1, w2_avg1 = optimize_segment()
-        w1_avg2, w2_avg2 = optimize_segment(start=split_point)
+        w1_avg1, w2_avg1 = optimize_segment(start=1, end=split_point)
+        w1_avg2, w2_avg2 = optimize_segment(start=split_point, end=T)
 
         #  Run-wise average of w1 across runs
         w1_avg1 = np.mean(w1_avg1, axis=0)
@@ -237,8 +235,7 @@ def drive_optimizer(split_point=None):
         w1_avg2 = np.mean(w1_avg2, axis=0)
         w2_avg2 = np.mean(w2_avg2, axis=0)
 
-        return w1_avg1, w2_avg1, w1_avg2, w2_avg2, true_w
-
+        return w1_avg1, w2_avg1, w1_avg2, w2_avg2
 
 #-------------
 #
@@ -251,52 +248,63 @@ def drive_optimizer(split_point=None):
 #
 #-------------
 
-w1_avg, w2_avg, true_w = drive_optimizer(split_point=None)
-
-# Generate all required data
-x_vals = list(range(1, T))  # Common x for most data
-x_vals_full = list(range(T))  # For SIR inset which uses full range
-
-# Compute y values
-w1_true_y = [true_w[t][0] for t in x_vals]
-w1_est_y = w1_avg
-w2_true_y = [true_w[t][1] for t in x_vals]
-w2_est_y = w2_avg
-sir_infections_y = [sum(1 for node in contact_graph.nodes() if true_dynamics[t][node] == 1) for t in x_vals_full]
-
-# Round to 2 decimal places where appropriate
-w1_est_y = [round(y, 2) for y in w1_est_y]
-w2_est_y = [round(y, 2) for y in w2_est_y]
-
 # Save to mfa_xy_data.txt
 # This is for single runs under a given SIR configuration
-def save_xy_data():
+# Split: Tuple (split_point, half), where split_point is the time to split the optimization, and half is either 1 or 2
+def save_xy_data(w1_avg=None, w2_avg=None, split=None):
+    # Compute y values
+    w1_true_y = [true_w[t][0] for t in range(T)]
+    w1_est_y = w1_avg
+    w2_true_y = [true_w[t][1] for t in range(T)]
+    w2_est_y = w2_avg
+    sir_infections_y = [sum(1 for node in contact_graph.nodes() if true_dynamics[t][node] == 1) for t in range(T)]
+
+    # Round to 2 decimal places where appropriate
+    w1_est_y = [round(y, 2) for y in w1_est_y]
+    w2_est_y = [round(y, 2) for y in w2_est_y]
+
+    # If there is a split point, adjust x_vals and y values accordingly
+    if split is not None:
+        sp, half = split
+        if half == 1:
+            x_ofs = 0  # Ofset for generating x values for plotting
+            sir_infections_y = sir_infections_y[:sp]
+            w1_true_y = w1_true_y[:sp-1]
+            w1_est_y = w1_est_y[:sp-1]
+            w2_true_y = w2_true_y[:sp-1]
+            w2_est_y = w2_est_y[:sp-1]
+        if half == 2:
+            x_ofs = sp  # Offset for generating x values for plotting
+            sir_infections_y = sir_infections_y[sp:]
+            w1_true_y = w1_true_y[sp:-1]
+            w1_est_y = w1_est_y[sp:-1]
+            w2_true_y = w2_true_y[sp:-1]
+            w2_est_y = w2_est_y[sp:-1]
+
     with open("experiment_data/mfa_xy_data.txt", "a") as f:
         f.write("==New Sample==\n")
         f.write("SIR Infections (Inset):\n")
-        f.write(f"x: {','.join(map(str, x_vals_full))}\n")
+        f.write(f"x: {','.join(map(str, range(x_ofs, len(sir_infections_y) + x_ofs)))}\n")
         f.write(f"y: {','.join(map(str, sir_infections_y))}\n\n")
 
         f.write("w1 True (Mean Node Degree):\n")
-        f.write(f"x: {','.join(map(str, x_vals))}\n")
+        f.write(f"x: {','.join(map(str, range(x_ofs, len(w1_true_y) + x_ofs)))}\n")
         f.write(f"y: {','.join(map(str, w1_true_y))}\n\n")
 
         f.write("w1 Estimated:\n")
-        f.write(f"x: {','.join(map(str, x_vals))}\n")
+        f.write(f"x: {','.join(map(str, range(x_ofs, len(w1_est_y) + x_ofs)))}\n")
         f.write(f"y: {','.join(map(str, w1_est_y))}\n\n")
 
         f.write("w2 True (Recovered Fraction):\n")
-        f.write(f"x: {','.join(map(str, x_vals))}\n")
+        f.write(f"x: {','.join(map(str, range(x_ofs, len(w2_true_y) + x_ofs)))}\n")
         f.write(f"y: {','.join(map(str, w2_true_y))}\n\n")
 
         f.write("w2 Estimated:\n")
-        f.write(f"x: {','.join(map(str, x_vals))}\n")
+        f.write(f"x: {','.join(map(str, range(x_ofs, len(w2_est_y) + x_ofs)))}\n")
         f.write(f"y: {','.join(map(str, w2_est_y))}\n\n")
 
-save_xy_data()
-
 # This is for averaging multiple runs under a given SIR configuration
-def save_results():
+def save_results(w1_avg, w2_avg):
     results = {
         "w1_avg": w1_avg,
         "w2_avg": w2_avg,
@@ -306,4 +314,11 @@ def save_results():
     with open("experiment_data/mfa_compute.pkl", "ab") as f:
         pickle.dump(results, f)
 
-save_results()
+if split_point is None:
+    w1_avg, w2_avg = drive_optimizer(split_point=None)
+    save_xy_data(w1_avg=w1_avg, w2_avg=w2_avg)
+    save_results(w1_avg=w1_avg, w2_avg=w2_avg)
+else:
+    w1_avg1, w2_avg1, w1_avg2, w2_avg2 = drive_optimizer(split_point=split_point)
+    save_xy_data(w1_avg=w1_avg1, w2_avg=w2_avg1, split=(split_point, 1))
+    save_xy_data(w1_avg=w1_avg2, w2_avg=w2_avg2, split=(split_point, 2))

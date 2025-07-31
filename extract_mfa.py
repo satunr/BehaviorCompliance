@@ -6,8 +6,12 @@ import pickle
 import re
 from itertools import cycle
 
+# plot_opt = True -> Plot optimization results for 1 sample (no splitting the optimization) 
 plot_opt = False
-plot_new = False
+show_adherence = False
+# plot_many = True -> Compare optimization results for 2 configurations, averaging with each (no splitting the optimization)
+#    Shows that when adh. = 0, <k> is indep. of beta
+#    Can also be used to plot optimization results for 1 sample, but with splitting
 plot_many = True
 
 #----------
@@ -91,13 +95,12 @@ if plot_opt == True:
     # Plot for Sample 1
     plot_sample(samples[0], 1)
 
-    # Plot for Sample 2
-    plot_sample(samples[1], 2)
-
+# Plot description: mfa_xy should have many of 1 config, many of another (split = False in mean_field_approx.py), 
+#   and this will plot the SIR curves and w1 True vs Estimated for each half (set of samples).
 def plot_halves(samples):
     # Divide samples into two halves
     n_samples = len(samples)
-    mid_point = (n_samples + 1) // 2  # Ceiling division to split as evenly as possible
+    mid_point = (n_samples + 1) // 2
     first_half = samples[:mid_point]
     second_half = samples[mid_point:]
     
@@ -188,7 +191,7 @@ def find_adherence(k0, k1):
 
     return adherence_proportion
 
-if plot_new == True:
+if show_adherence == True:
 
 #-----------
 #
