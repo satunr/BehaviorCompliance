@@ -110,7 +110,7 @@ def restore_edges(g_init, g, node):
 # adherence: Set to a float value between 0 and 1. Ratio of individuals that will adhere to quarantine measures.
 # NOTE: average_data only averages infection numbers. May be removed in the future.
 def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,average_data,
-                 q=False,allow_restoration=False,save_all=False,lt_threshold=None,adherence=None):
+                 q=False,allow_restoration=False,save_all=False,lt_threshold=None,adherence=None,begin_q=0):
     if social_network == None:
         social_network = correlated_graphs.create_social_graph(contact_network)[0]
 
@@ -137,20 +137,6 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
             if node not in non_adhering:
                 nx.set_node_attributes(contact_network, {node: {'Adheres?': 'Yes'}})
                 nx.set_node_attributes(social_network, {node: {'Adheres?': 'Yes'}})
-
-        # Get the initial set of informed nodes
-        informed = find_seeds.find_seed_set(social_network, num_seeds=round(0.05 * len(social_network.nodes())),exponent=1)
-
-        # Set labels for informed set
-        for node in informed:
-            nx.set_node_attributes(contact_network, {node: {'Informed?': 'Informed'}})
-            nx.set_node_attributes(social_network, {node: {'Informed?': 'Informed'}})
-
-        # Set labels for uninformed nodes
-        for node in contact_network.nodes(): 
-            if node not in informed:
-                nx.set_node_attributes(contact_network, {node: {'Informed?': 'Uninformed'}})
-                nx.set_node_attributes(social_network, {node: {'Informed?': 'Uninformed'}})
 
         # We are saving the initial state of G so we know what connections to restore later
         G_initial = deepcopy(contact_network)
@@ -183,11 +169,15 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
 
         # Holds dynamic quarantine lengths
         quarantine_statuses = [0 for _ in range(0, n)]
+        quarantine_prob_matrix = np.zeros((T, n)) # T x n matrix: hold probabilities of quarantine for each node at each time step
+        #  Initialize every node to 'Uninformed'
+        for node in contact_network.nodes():
+            nx.set_node_attributes(contact_network, {node: {'Informed?': 'Uninformed'}})
+        for node in social_network.nodes():
+            nx.set_node_attributes(social_network, {node: {'Informed?': 'Uninformed'}})
 
         all_quaratines = []
         all_infections = []
-
-        quarantine_prob_matrix = np.zeros((T, n)) # T x n matrix: hold probabilities of quarantine for each node at each time step
 
         mean_node_degrees = []
 
@@ -195,31 +185,43 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
 
             #--------
             #
-            #  Make changes to the set of informed nodes
+            #  Make social network changes
             #
             #-------
 
-            if lt_threshold == None: # If we are using I.C., that is
-                ic_results = IM.IC_prob_matrix(social_network, S=informed, p=0.05, mc=1000, quarantining=quarantine_statuses)
-                prob_matrix = ic_results[0]
-                new_informed = ic_results[1]
+            #  People become aware of need to quarantine at time t==begin_q
+            if t == begin_q:
+                # Get the initial set of informed nodes
+                informed = find_seeds.find_seed_set(social_network, num_seeds=round(0.05 * len(social_network.nodes())),exponent=1)
 
-                quarantine_prob_matrix[t] = prob_matrix
+                # Set labels for informed set
+                for node in informed:
+                    nx.set_node_attributes(contact_network, {node: {'Informed?': 'Informed'}})
+                    nx.set_node_attributes(social_network, {node: {'Informed?': 'Informed'}})
 
-            else:
-                lt_results = IM.lt_prob_matrix(social_network, threshold=lt_threshold, S=informed, quarantining=quarantine_statuses)
-                prob_matrix = lt_results[0]
-                new_informed = lt_results[1]
+            #  Influence spreads
+            elif t > begin_q:
+                if lt_threshold == None: # If we are using I.C., that is
+                    ic_results = IM.IC_prob_matrix(social_network, S=informed, p=0.05, mc=1000, quarantining=quarantine_statuses)
+                    prob_matrix = ic_results[0]
+                    new_informed = ic_results[1]
 
-                quarantine_prob_matrix[t] = prob_matrix
-            
-            # Set labels for informed set
-            for node in new_informed:
-                nx.set_node_attributes(contact_network, {node: {'Informed?': 'Informed'}})
-                nx.set_node_attributes(social_network, {node: {'Informed?': 'Informed'}})
+                    quarantine_prob_matrix[t] = prob_matrix
 
-            informed = informed + new_informed
-            informed = list(set(informed))  # Remove duplicates
+                else:
+                    lt_results = IM.lt_prob_matrix(social_network, threshold=lt_threshold, S=informed, quarantining=quarantine_statuses)
+                    prob_matrix = lt_results[0]
+                    new_informed = lt_results[1]
+
+                    quarantine_prob_matrix[t] = prob_matrix
+                
+                # Set labels for informed set
+                for node in new_informed:
+                    nx.set_node_attributes(contact_network, {node: {'Informed?': 'Informed'}})
+                    nx.set_node_attributes(social_network, {node: {'Informed?': 'Informed'}})
+
+                informed = informed + new_informed
+                informed = list(set(informed))  # Remove duplicates
 
             if save_all == True:
                 all_quaratines.append(quarantine_statuses.copy())

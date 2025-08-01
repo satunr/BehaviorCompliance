@@ -37,8 +37,8 @@ gamma = 0.10
 mu = 0.10
 init = 0.10
 q = True
-adherence = 0.5
-split_point = 10 # Set to None if you want to optimize over the full SIR simulation, or a specific time point to split the optimization
+adherence = 0.9
+split_point = 20  # Set to None if you want to optimize over the full SIR simulation, or a specific time point to split the optimization
 
 # Clear data files
 def truncate_files():
@@ -76,7 +76,8 @@ SIR_results = SIR.Simulate_SIR(
     social_network=deepcopy(social_graph),
     T=T, Repeat=Repeat,
     beta=beta, gamma=gamma, mu=mu, init=init,
-    average_data=False, q=q, allow_restoration=q, save_all=True, adherence=adherence
+    average_data=False, q=q, allow_restoration=q, 
+    save_all=True, adherence=adherence, begin_q=split_point
 )
 
 deg_lst = SIR_results[6]
@@ -132,17 +133,25 @@ for t in range(start, T):
         T = t + 1
         break
 
-# Shorten true_dynamics and deg_lst to match new T
+# Shorten true_dynamics and deg_lst to match new T, where optimizer is well-behaved
 true_dynamics = true_dynamics[:T]
 deg_lst = deg_lst[:T]
 
-mean_degrees = np.mean(deg_lst)   # Mean degree of contact network over time
+if split_point is not None:
+    seg1 = deg_lst[:split_point]
+    mean1 = np.mean(seg1)
+    seg2 = deg_lst[split_point:]
+    mean2 = np.mean(seg2)
+    #  Split mean_degrees into two halves with their own respective means
+    mean_degrees = [mean1] * len(seg1) + [mean2] * len(seg2)
+else:
+    mean_degrees = [np.mean(deg_lst) for _ in range(T)]   # Mean degree of contact network over time
 binomial_bound = n * p + np.sqrt(n * p * (1 - p))
 
 # Compute true w1 and w2 values: Mean degree and fraction of recovered nodes
 true_w = []
 for time in range(T):
-    true_w1 = mean_degrees
+    true_w1 = mean_degrees[time]
     true_w2 = sum(1 for node in contact_graph.nodes() if true_dynamics[time][node] == 2) / n  # Recovered portion
     true_w.append((true_w1, true_w2))
 
@@ -322,3 +331,5 @@ else:
     w1_avg1, w2_avg1, w1_avg2, w2_avg2 = drive_optimizer(split_point=split_point)
     save_xy_data(w1_avg=w1_avg1, w2_avg=w2_avg1, split=(split_point, 1))
     save_xy_data(w1_avg=w1_avg2, w2_avg=w2_avg2, split=(split_point, 2))
+    save_results(w1_avg=w1_avg1, w2_avg=w2_avg1)
+    save_results(w1_avg=w1_avg2, w2_avg=w2_avg2)

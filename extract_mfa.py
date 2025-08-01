@@ -8,7 +8,7 @@ from itertools import cycle
 
 # plot_opt = True -> Plot optimization results for 1 sample (no splitting the optimization) 
 plot_opt = False
-show_adherence = False
+show_adherence = True
 # plot_many = True -> Compare optimization results for 2 configurations, averaging with each (no splitting the optimization)
 #    Shows that when adh. = 0, <k> is indep. of beta
 #    Can also be used to plot optimization results for 1 sample, but with splitting

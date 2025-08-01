@@ -15,7 +15,7 @@ import numpy as np
 #
 #----------
 
-repeat = 10
+repeat = 1
 
 # We now have data in mfa_compute.pkl. We will perform averaging computations, then load the result into mfa_xy_data.pkl
 def average_saved_results():
