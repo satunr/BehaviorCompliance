@@ -16,6 +16,8 @@ import numpy as np
 #----------
 
 repeat = 1
+run_simulation = False
+run_real_world = True
 
 # We now have data in mfa_compute.pkl. We will perform averaging computations, then load the result into mfa_xy_data.pkl
 def average_saved_results():
@@ -53,30 +55,41 @@ def truncate_compute_file():
     if os.path.exists("experiment_data/mfa_compute.pkl"):
         with open("experiment_data/mfa_compute.pkl", 'wb') as f:
             pass  # This will truncate the file
+    if os.path.exists("experiment_data/mfa_xy_data.pkl"):
+        with open("experiment_data/mfa_xy_data.pkl", 'wb') as f:
+            pass
 
-# Clear compute file for next SIR config averaging
-truncate_compute_file()
+if run_simulation == True:
+    # Clear compute file for next SIR config averaging
+    truncate_compute_file()
 
-for _ in range(repeat):
-    subprocess.run([sys.executable, "mean_field_approx.py", "--subprocess"])
+    for _ in range(repeat):
+        subprocess.run([sys.executable, "mean_field_approx.py", "--subprocess"])
 
-load_path = "experiment_data/mfa_avgs.pkl"
+    load_path = "experiment_data/mfa_avgs.pkl"
 
-# Step 1: Load existing data safely
-if os.path.exists(load_path) and os.path.getsize(load_path) > 0:
-    with open(load_path, "rb") as f:
-        try:
-            data = pickle.load(f)  # Assumes the file contains a list
-        except EOFError:
-            data = []
-else:
-    data = []
+    # Step 1: Load existing data safely
+    if os.path.exists(load_path) and os.path.getsize(load_path) > 0:
+        with open(load_path, "rb") as f:
+            try:
+                data = pickle.load(f)  # Assumes the file contains a list
+            except EOFError:
+                data = []
+    else:
+        data = []
 
-# Step 2: Append the new result
-run_avgs = average_saved_results()
+    # Step 2: Append the new result
+    run_avgs = average_saved_results()
 
-data.append(run_avgs)
+    data.append(run_avgs)
 
-# Step 3: Save it back (overwrite with updated list)
-with open(load_path, "wb") as f:
-    pickle.dump(data, f)
+    # Step 3: Save it back (overwrite with updated list)
+    with open(load_path, "wb") as f:
+        pickle.dump(data, f)
+
+if run_real_world == True:
+    truncate_compute_file()
+    #  Split point is in mfa_real_world.py
+    subprocess.run([sys.executable, "mfa_real_world.py", "--first_half"])
+    subprocess.run([sys.executable, "mfa_real_world.py", "--second_half"])
+    average_saved_results()

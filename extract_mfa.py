@@ -8,11 +8,12 @@ from itertools import cycle
 
 # plot_opt = True -> Plot optimization results for 1 sample (no splitting the optimization) 
 plot_opt = False
-show_adherence = True
+plot_opt_real_world = True  # Plot optimization results for 1 sample, but with real-world data (Ex. Covid csv file)
+show_adherence = False
 # plot_many = True -> Compare optimization results for 2 configurations, averaging with each (no splitting the optimization)
 #    Shows that when adh. = 0, <k> is indep. of beta
 #    Can also be used to plot optimization results for 1 sample, but with splitting
-plot_many = True
+plot_many = False
 
 #----------
 #
@@ -64,28 +65,65 @@ def parse_sample_data(filename):
     
     return samples
 
+import matplotlib.pyplot as plt
+
 def plot_sample(sample, sample_num):
-    # Plot w1 True vs w1 Estimated
+    # Plot Mean Node Degree (w1)
     plt.figure(figsize=(10, 6))
-    plt.plot(sample['w1 True (Mean Node Degree)']['x'], sample['w1 True (Mean Node Degree)']['y'], label='w1 True (Mean Node Degree)', color='#1f77b4', linestyle='-')
-    plt.plot(sample['w1 Estimated']['x'], sample['w1 Estimated']['y'], label='w1 Estimated', color='#ff7f0e', linestyle='--')
+
+    if 'w1 True (Mean Node Degree)' in sample:
+        plt.plot(
+            sample['w1 True (Mean Node Degree)']['x'],
+            sample['w1 True (Mean Node Degree)']['y'],
+            label='w1 True (Mean Node Degree)',
+            color='#1f77b4',
+            linestyle='-'
+        )
+
+    if 'w1 Estimated' in sample:
+        plt.plot(
+            sample['w1 Estimated']['x'],
+            sample['w1 Estimated']['y'],
+            label='w1 Estimated',
+            color='#ff7f0e',
+            linestyle='--'
+        )
+
     plt.xlabel('Time')
     plt.ylabel('Mean Node Degree')
     plt.title(f'Sample {sample_num}: w1 True vs Estimated')
     plt.legend()
     plt.grid(True)
     plt.show()
-    
-    # Plot w2 True vs w2 Estimated
+
+    # Plot Recovered Fraction (w2)
     plt.figure(figsize=(10, 6))
-    plt.plot(sample['w2 True (Recovered Fraction)']['x'], sample['w2 True (Recovered Fraction)']['y'], label='w2 True (Recovered Fraction)', color='#2ca02c', linestyle='-')
-    plt.plot(sample['w2 Estimated']['x'], sample['w2 Estimated']['y'], label='w2 Estimated', color='#d62728', linestyle='--')
+
+    if 'w2 True (Recovered Fraction)' in sample:
+        plt.plot(
+            sample['w2 True (Recovered Fraction)']['x'],
+            sample['w2 True (Recovered Fraction)']['y'],
+            label='w2 True (Recovered Fraction)',
+            color='#2ca02c',
+            linestyle='-'
+        )
+
+    if 'w2 Estimated' in sample:
+        plt.plot(
+            sample['w2 Estimated']['x'],
+            sample['w2 Estimated']['y'],
+            label='w2 Estimated',
+            color='#d62728',
+            linestyle='--'
+        )
+
     plt.xlabel('Time')
     plt.ylabel('Recovered Fraction')
     plt.title(f'Sample {sample_num}: w2 True vs Estimated')
     plt.legend()
     plt.grid(True)
     plt.show()
+
 
 if plot_opt == True:
     # Main execution
@@ -98,76 +136,82 @@ if plot_opt == True:
 # Plot description: mfa_xy should have many of 1 config, many of another (split = False in mean_field_approx.py), 
 #   and this will plot the SIR curves and w1 True vs Estimated for each half (set of samples).
 def plot_halves(samples):
-    # Divide samples into two halves
+    from itertools import cycle
+    import matplotlib.pyplot as plt
+
     n_samples = len(samples)
     mid_point = (n_samples + 1) // 2
     first_half = samples[:mid_point]
     second_half = samples[mid_point:]
-    
-    # Define color cycle for different samples
-    colors = cycle(['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'])  # Matplotlib default colors
-    
-    # Plot for first half
+
+    colors = cycle(['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'])
+
+    # Plot first half
     if first_half:
-        # Plot all SIR curves
+        # SIR infections
         plt.figure(figsize=(10, 6))
         for i, sample in enumerate(first_half, 1):
             color = next(colors)
-            plt.plot(sample['SIR Infections (Inset)']['x'], sample['SIR Infections (Inset)']['y'], label=f'Sample {i}', color=color)
+            plt.plot(sample['SIR Infections (Inset)']['x'], sample['SIR Infections (Inset)']['y'],
+                     label=f'Sample {i}', color=color)
         plt.xlabel('Time')
         plt.ylabel('SIR Infections')
         plt.title('First Half: SIR Infections')
         plt.grid(True)
+        plt.legend()
         plt.show()
-        
-        # Reset color cycle for w1 plot
+
         colors = cycle(['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'])
-        
-        # Plot all w1 True and Estimated
+
+        # w1 True and Estimated
         plt.figure(figsize=(10, 6))
         for i, sample in enumerate(first_half, 1):
             color = next(colors)
-            plt.plot(sample['w1 True (Mean Node Degree)']['x'], sample['w1 True (Mean Node Degree)']['y'], 
-                     label=f'Sample {i} w1 True', color=color, linestyle='-')
-            plt.plot(sample['w1 Estimated']['x'], sample['w1 Estimated']['y'], 
+            if 'w1 True (Mean Node Degree)' in sample:
+                plt.plot(sample['w1 True (Mean Node Degree)']['x'], sample['w1 True (Mean Node Degree)']['y'],
+                         label=f'Sample {i} w1 True', color=color, linestyle='-')
+            plt.plot(sample['w1 Estimated']['x'], sample['w1 Estimated']['y'],
                      label=f'Sample {i} w1 Estimated', color=color, linestyle='--')
         plt.xlabel('Time')
         plt.ylabel('Mean Node Degree')
         plt.title('First Half: w1 True vs Estimated')
         plt.grid(True)
+        plt.legend()
         plt.show()
-    
-    # Reset color cycle for second half
+
+    # Plot second half
     colors = cycle(['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'])
-    
-    # Plot for second half
+
     if second_half:
-        # Plot all SIR curves
+        # SIR infections
         plt.figure(figsize=(10, 6))
         for i, sample in enumerate(second_half, mid_point + 1):
             color = next(colors)
-            plt.plot(sample['SIR Infections (Inset)']['x'], sample['SIR Infections (Inset)']['y'], label=f'Sample {i}', color=color)
+            plt.plot(sample['SIR Infections (Inset)']['x'], sample['SIR Infections (Inset)']['y'],
+                     label=f'Sample {i}', color=color)
         plt.xlabel('Time')
         plt.ylabel('SIR Infections')
         plt.title('Second Half: SIR Infections')
         plt.grid(True)
+        plt.legend()
         plt.show()
-        
-        # Reset color cycle for w1 plot
+
         colors = cycle(['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'])
-        
-        # Plot all w1 True and Estimated
+
+        # w1 True and Estimated
         plt.figure(figsize=(10, 6))
         for i, sample in enumerate(second_half, mid_point + 1):
             color = next(colors)
-            plt.plot(sample['w1 True (Mean Node Degree)']['x'], sample['w1 True (Mean Node Degree)']['y'], 
-                     label=f'Sample {i} w1 True', color=color, linestyle='-')
-            plt.plot(sample['w1 Estimated']['x'], sample['w1 Estimated']['y'], 
+            if 'w1 True (Mean Node Degree)' in sample:
+                plt.plot(sample['w1 True (Mean Node Degree)']['x'], sample['w1 True (Mean Node Degree)']['y'],
+                         label=f'Sample {i} w1 True', color=color, linestyle='-')
+            plt.plot(sample['w1 Estimated']['x'], sample['w1 Estimated']['y'],
                      label=f'Sample {i} w1 Estimated', color=color, linestyle='--')
         plt.xlabel('Time')
         plt.ylabel('Mean Node Degree')
         plt.title('Second Half: w1 True vs Estimated')
         plt.grid(True)
+        plt.legend()
         plt.show()
 
 if plot_many == True:
@@ -191,27 +235,15 @@ def find_adherence(k0, k1):
 
     return adherence_proportion
 
-if show_adherence == True:
+if plot_opt_real_world == True:
+    # Parse the average results from the file
+    samples = parse_sample_data("experiment_data/mfa_xy_data.txt")
 
-#-----------
-#
-#  Parse data written by mfa_drive_compute.py to experiment_data/mfa_avgs.pkl
-#  Data is saved in the form: (w1_avg, w2_avg_vec) for each configuration.
-#
-# Approximate quarantine adherence proportion as: (<k> - k) / <k>, where <k> is mean node degree from optimization w/ no quarantine,
-#    k is mean node degree from optimization w/ quarantine (this should be the data from experiment_data/mfa_xy_data)
-#
-# ----------
+    plot_halves(samples)
 
-    samples = parse_avgs("experiment_data/mfa_avgs.pkl")
+    #  Extract last w1 value from each sample
+    k1 = samples[0]['w1 Estimated']['y'][-1]
+    k2 = samples[1]['w1 Estimated']['y'][-1]
 
-    # Print hypothesized adherence proportion
-    k_sample0 = samples[0][0]
-    k_sample1 = samples[1][0]
-
-    print("Mean Node Degrees: ", k_sample0, " ", k_sample1)
-
-    adherence_proportion = find_adherence(k_sample0, k_sample1)
+    adherence_proportion = find_adherence(k1, k2)
     print("Adherence Proportion:", adherence_proportion)
-
-    

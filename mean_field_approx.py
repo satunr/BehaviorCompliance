@@ -42,8 +42,8 @@ split_point = 20  # Set to None if you want to optimize over the full SIR simula
 
 # Clear data files
 def truncate_files():
-    files_to_truncate = ["experiment_data/mfa_results.txt", "experiment_data/mfa_contact.gml", 
-                         "experiment_data/mfa_social.gml", "experiment_data/mfa_xy_data.pkl", "experiment_data/mfa_avgs.pkl"]
+    files_to_truncate = ["experiment_data/mfa_contact.gml", "experiment_data/mfa_social.gml", 
+                         "experiment_data/mfa_xy_data.pkl", "experiment_data/mfa_avgs.pkl"]
     for file in files_to_truncate:
         if os.path.exists(file):
             with open(file, 'w') as f:
