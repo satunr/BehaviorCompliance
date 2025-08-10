@@ -111,7 +111,10 @@ def restore_edges(g_init, g, node):
 # NOTE: average_data only averages infection numbers. May be removed in the future.
 def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,average_data,
                  q=False,allow_restoration=False,save_all=False,lt_threshold=None,adherence=None,begin_q=0):
-    if social_network == None:
+    if begin_q is None:
+        begin_q = 0
+
+    if social_network is None:
         social_network = correlated_graphs.create_social_graph(contact_network)[0]
 
     print(len(social_network.nodes()), "nodes in social network")
