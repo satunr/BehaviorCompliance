@@ -33,9 +33,9 @@ beta = 0.11
 gamma = 0.10
 mu = 0.10
 init = 0.10
-q = True
-adherence = 0.60  # Adherence = None -> Full adherence, otherwise it is a float between 0 and 1
-split_point = None  # Set to None if you want to optimize over the full SIR simulation, or a specific time point to split the optimization
+q = "r"
+adherence = 0.6  # Adherence = None -> Full adherence, otherwise it is a float between 0 and 1
+split_point = 25  # Set to None if you want to optimize over the full SIR simulation, or a specific time point to split the optimization
 
 # Clear data files
 def truncate_files():
@@ -82,7 +82,7 @@ true_dynamics = SIR_results[4]
 
 def given_at_time(time):
     new_r_ratio = sum(1 for node in contact_graph.nodes() 
-                            if true_dynamics[time][node] == 2 and true_dynamics[time-1][node] < 2) / n
+                            if true_dynamics[time][node] == 2 and true_dynamics[time-1][node] != 2) / n
     new_i_ratio = sum(1 for node in contact_graph.nodes() 
                             if true_dynamics[time][node] == 1 and true_dynamics[time-1][node] != 1) / n
     x1 = beta * (new_r_ratio / gamma)
@@ -122,7 +122,7 @@ def loss(params, w1_run_avg, prev_w2, T_gen, eps_w1, eps_w2):
 
 # Mean-field approximation loses accuracy for small i
 # -> Trim simulation; find where newly infected ratio < smallest_accurate_ratio
-start = 0  # Ignore insufficient numbers at the start. Experimentally determined.
+start = 2  # Ignore insufficient numbers at the start. Experimentally determined.
 smallest_accurate_ratio = 0.1  # Minimum ratio of infected nodes to total nodes to consider the simulation accurate. Experimentally determined.
 for t in range(start, T):
     i = sum(1 for node in contact_graph.nodes() if true_dynamics[t][node] == 1) / len(contact_graph.nodes())
@@ -324,3 +324,28 @@ else:
     w1_avg1, w2_avg1, w1_avg2, w2_avg2 = drive_optimizer(split_point=split_point)
     save_xy_data(w1_avg=w1_avg1, w2_avg=w2_avg1, split=(split_point, 1))
     save_xy_data(w1_avg=w1_avg2, w2_avg=w2_avg2, split=(split_point, 2))
+
+# Save daily infected and daily recovered counts to file
+# Will be used in comparing ideal vs actual quarantine dynamics
+def save_daily_infected_recovered():
+    with open("experiment_data/infected_recovered.txt", "w") as f:
+        f.write(f"Split point: {split_point}\n")
+        f.write(f"Total nodes: {n}\n")
+        f.write("Day,Newly Infected,Newly Recovered\n")
+        
+        # Start from day 1 because day 0 has no "previous day" to compare against
+        for day in range(1, T):
+            newly_infected = sum(
+                1
+                for node in contact_graph.nodes()
+                if true_dynamics[day][node] == 1 and true_dynamics[day - 1][node] != 1
+            )
+            newly_recovered = sum(
+                1
+                for node in contact_graph.nodes()
+                if true_dynamics[day][node] == 2 and true_dynamics[day - 1][node] != 2
+            )
+            
+            f.write(f"{day},{newly_infected},{newly_recovered}\n")
+
+save_daily_infected_recovered()

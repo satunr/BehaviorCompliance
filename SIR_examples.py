@@ -19,7 +19,8 @@ init = 0.15
 
 contact_network = nx.erdos_renyi_graph(100, 0.05, seed=42)
 
-social_network = nx.erdos_renyi_graph(100, 0.05, seed=42)  # Placeholder for social network, replace with actual creation logic
+# social_network = nx.erdos_renyi_graph(100, 0.05, seed=42)  # Placeholder for social network, replace with actual creation logic
+social_network = correlated_graphs.create_social_graph(contact_network)[0]
 social_network = social_network.to_directed()  # Ensure the social network is directed
 
 def informed_vs_noninformed():
@@ -236,6 +237,58 @@ def plot_jaccard_similarity():
 
     return df, bin_means, 
 
+def random_vs_nonrandom_seeds(num_comparisons):
+    repeat = 10
+    infections_random = []
+    infections_nonrandom = []
+    for i in range(1, num_comparisons+1):
+        print("Run #: ", i)
+        inner_random_avg = []
+        for _ in range(repeat):
+            # Random seed selection
+            data_random = SIR.Simulate_SIR(
+                contact_network=deepcopy(contact_network),
+                social_network=deepcopy(social_network),
+                T=T, Repeat=Repeat,
+                beta=beta, gamma=gamma, mu=mu, init=init, q=True,
+                allow_restoration=True,
+                num_seeds=(i, "r")  # Randomly select 5 seeds
+            )[2]
+            inner_random_avg.append(data_random[1])
+        infections_random.append(np.mean(inner_random_avg, axis=0))
+
+        inner_nonrandom_avg = []
+        for _ in range(repeat):
+            # Non-random seed selection
+            data_nonrandom = SIR.Simulate_SIR(
+                contact_network=deepcopy(contact_network),
+                social_network=deepcopy(social_network),
+                T=T, Repeat=Repeat,
+                beta=beta, gamma=gamma, mu=mu, init=init, q=True,
+                allow_restoration=True,
+                num_seeds=(i, "f")  # Select top 5 seeds based on degree
+            )[2]
+            inner_nonrandom_avg.append(data_nonrandom[1])
+        infections_nonrandom.append(np.mean(inner_nonrandom_avg, axis=0))
+
+    # Extract the scalar mean that represents average infection over time under the given seed configuration
+    avg_infections_random = [np.mean(data) for data in infections_random]
+    avg_infections_nonrandom = [np.mean(data) for data in infections_nonrandom]
+
+    plt.figure(figsize=(12, 6))
+    plt.plot(range(1, len(avg_infections_random)+1), avg_infections_random,
+            label='Random Seeds', alpha=0.7, color='orange',
+            marker='o', linestyle='None') 
+    plt.plot(range(1, len(avg_infections_nonrandom)+1), avg_infections_nonrandom,
+            label='Non-Random Seeds', alpha=0.7, color='blue',
+            marker='o', linestyle='None')
+    plt.xlabel('Comparison Index')
+    plt.ylabel('Avg # of Infected')
+    plt.title('Random vs Non-Random Seed Selection')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
 # Pickle results from the functions
 def SIR_pickle_dump(filename='experiment_data/pickles.pkl'):
     # We will pickle these parameters along with the results for later reference
@@ -256,7 +309,7 @@ def SIR_pickle_dump(filename='experiment_data/pickles.pkl'):
         pickle.dump({'Normal Dist. Quarantines': normal_dist_quarantines()}, f)
     print("Data has been pickled successfully.")
 
-SIR_pickle_dump()
+# SIR_pickle_dump()
 
 def pickle_load(filename='experiment_data/pickles.pkl'):
     # Open the file in binary read mode
@@ -265,3 +318,5 @@ def pickle_load(filename='experiment_data/pickles.pkl'):
 
     # Now `data` holds the deserialized object
     print(data)
+
+random_vs_nonrandom_seeds(4)

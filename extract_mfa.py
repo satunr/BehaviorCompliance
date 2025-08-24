@@ -1,17 +1,19 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import re
-from itertools import cycle
+from itertools import cycle, repeat
 import ast
+import os
 import re
 
 # plot_opt = True -> Plot optimization results for 1 sample (no splitting the optimization) 
-plot_opt = True
+plot_opt = False
 plot_opt_real_world = False  # Plot optimization results for 1 sample, but with real-world data (Ex. Covid csv file)
 show_adherence = False
 plot_split_opt = False  #  Plot average results for 1 configuration, but with splitting the optimization
 plot_many_non_split = False  # Plot many <k> estimates without splitting
 show_independence_k = False  # Show that <k> is independent of SIRS parameters when adherence = 0
+analyze_quarantine_dynamics = True  # Compare ideal vs actual quarantine dynamics from I(t), R(t), <k> estimated
 
 #----------
 #
@@ -82,7 +84,6 @@ def parse_sample_data(filename):
             samples.append(current_sample)
     
     return samples
-
 
 def plot_sample(sample, sample_num):
     # Plot Mean Node Degree (w1)
@@ -373,7 +374,7 @@ def plot_independence(samples):
 
     plt.xlabel('Time')
     plt.ylabel('Mean Node Degree')
-    plt.title('w1 True vs Estimated for All Samples with Std Dev Band')
+    plt.title('<k> results from optimizer')
     plt.grid(True)
     plt.legend()
     plt.show()
@@ -391,3 +392,111 @@ if show_adherence == True:
             w1_true = sample['w1 True (Mean Node Degree)']['y'][-1]
             adherence = np.mean(np.abs(w1_estimated - w1_true) / w1_true)
             print(f"Sample {i}: Adherence = {adherence}")
+
+
+#-------------
+#
+#  Adherence Calculations:
+#  We will use daily infected and recovered numbers, 
+#  along with our MFA optimizer for <k> to compute difference
+#  between ideal and actual quarantine dynamics
+#
+#-------------
+
+def split_triples_from_file(filename="experiment_data/infected_recovered.txt"):
+    # 1. Read all lines from file
+    with open(filename, "r") as f:
+        lines = [line.strip() for line in f if line.strip()]
+    
+    # 2. Extract split point and total nodes
+    split_point = int(lines[0].split(":")[1].strip()) - 1
+    total_nodes = int(lines[1].split(":")[1].strip())
+    
+    # 3. Parse triples (skip header at index 1)
+    triples = []
+    for line in lines[3:]:
+        day_str, inf_str, rec_str = line.split(",")
+        triples.append((int(day_str), int(inf_str), int(rec_str)))
+    
+    # 4. Split into two lists
+    before = [t for t in triples if t[0] < split_point]
+    after  = [t for t in triples if t[0] >= split_point]
+    
+    return split_point, total_nodes, before, after
+
+if analyze_quarantine_dynamics == True:
+    num_runs = 5  # Number of runs for SIRS so we can average results for daily infections, daily recoveries
+    samples = parse_sample_data("experiment_data/mfa_xy_data.txt")
+    
+    # m.n.d. before quarantining is observed
+    # We say that our <k>'s are determined using the first run of SIRS
+    #   We can't average this, as the k vector may be of different lengths for different runs 
+    #     (recall sufficient I(t) to continue optimizer)
+    k_0 = samples[0]['w1 Estimated']['y'][-1]
+    # k_0 = samples[0]['w1 True (Mean Node Degree)']['y'][-1]
+    # m.n.d. after quarantining is observed
+    k_q = samples[1]['w1 Estimated']['y'][-1]
+    # k_q = samples[1]['w1 True (Mean Node Degree)']['y'][-1]
+
+    # Clear infected_recovered.txt
+    with open("experiment_data/infected_recovered.txt", "w") as f:
+        f.truncate(0)
+
+    # Recall that the true split_point will be split_point + 1
+    split_point = None
+    total_nodes = None
+    avg_before_lst = []
+    avg_after_lst = []
+    for i in range(num_runs):
+        # Progress message
+        print("Current run: ", i)
+
+        # Run mean_field_approx.py to populate infected_recovered.txt
+        os.system("python mean_field_approx.py")
+        
+        split_point, total_nodes, before_list, after_list = split_triples_from_file()
+        avg_before_lst.append(before_list)
+        avg_after_lst.append(after_list)
+
+        # Clear infected_recovered.txt
+        with open("experiment_data/infected_recovered.txt", "w") as f:
+            f.truncate(0)
+
+    before_list = np.mean(avg_before_lst, axis=0)
+    after_list = np.mean(avg_after_lst, axis=0)
+    full_list = before_list + after_list
+
+    def plot_daily_infections():
+        days = [t[0] for t in full_list]
+        infections = [t[1] for t in full_list]
+        plt.plot(days, infections, label='Daily Infections')
+        plt.xlabel('Days')
+        plt.ylabel('Number of Infections')
+        plt.title('Daily Infections Over Time')
+        plt.legend()
+        plt.show()
+
+    # plot_daily_infections()
+
+    # print("Split point:", split_point)
+    # print("Before:", before_list)
+    # print("After:", after_list)
+    print("k_0:", k_0)
+    print("k_q:", k_q)
+    print("Total nodes: ", total_nodes)
+
+    # I_t: Sum of newly infected up to t, minus sum of newly recovered up to t
+    # Approximate I(t) when only given daily data
+    def I(time):
+        return sum(full_list[i][1] for i in range(split_point, time)) - sum(full_list[i][2] for i in range(split_point, time))
+
+    # Mean node degree if quarantine measures were followed 100%
+    k_effective = [k_0 * (1 - I(time) / total_nodes) for time in range(split_point, len(full_list))]
+
+    # Expected <k> at each time point under full adherence
+    expected_k = (1 / len(k_effective)) * sum(k_effective)
+
+    # adherence = 1 - (k_q - expected_k) / k_q if k_q != 0 else 0
+    adherence = 1 - (expected_k - k_q) / expected_k if expected_k != 0 else 0
+
+    print("Adherence, new formulation: ", adherence)
