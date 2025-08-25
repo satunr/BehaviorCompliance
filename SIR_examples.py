@@ -7,6 +7,8 @@ from copy import deepcopy
 import pickle
 import numpy as np
 import pandas as pd
+import random
+import find_seeds
 
 n = 100
 T = 100
@@ -198,95 +200,116 @@ def normal_dist_quarantines():
     return (x, mean_norm, std_norm), (x, mean_noq, std_noq)
 
 # Function to plot Jaccard similarity between contact and social networks (2-hop creation) as X, and existence of edge (0 or 1) as Y
-def plot_jaccard_similarity():
+def plot_jaccard_similarity(num_runs=20, bins=10):
     # Load and preprocess graph
     H = nx.read_gml('experiment_data/Freeman3.gml')
     H = nx.convert_node_labels_to_integers(H, first_label=0)
     contact_graph = H.to_undirected()
 
-    # Relabel nodes in parsed graph to avoid off by 1 errors in SIR.py
-    # Create a mapping from old node to new node: i -> i - 1
-    mapping = {node: node - 1 for node in contact_graph.nodes()}
+    # Store bin_means for each run
+    all_bin_means = []
 
-    # Relabel the nodes
-    # contact_graph = nx.relabel_nodes(contact_graph, mapping)
-    # contact_graph = nx.erdos_renyi_graph(100, 0.05, seed=42)  # Placeholder for contact graph, replace with actual creation logic
+    for run in range(num_runs):
+        social_graph, sim = correlated_graphs.create_social_graph(contact_graph)
+        I = social_graph.to_undirected()
+        data = [(sim[pair], int(I.has_edge(*pair))) for pair in sim]
+        df = pd.DataFrame(data, columns=['similarity', 'edge'])
 
-    social_graph_result = correlated_graphs.create_social_graph(contact_graph)
-    social_graph = social_graph_result[0]
-    sim = social_graph_result[1]
+        # Bin similarities and average edge existence
+        df['bin'] = pd.cut(df['similarity'], bins=bins)
+        bin_means = df.groupby('bin')['edge'].mean()
+        all_bin_means.append(bin_means.values)
 
-    # Plot
-    # Plot: Similarity vs. Edge Existence in Undirected G
-    I = social_graph.to_undirected()
-    data = [(sim[pair], int(I.has_edge(*pair))) for pair in sim]
-    df = pd.DataFrame(data, columns=['similarity', 'edge'])
+    # Convert to array shape: (num_runs, num_bins)
+    all_bin_means = np.array(all_bin_means)
 
-    # Bin similarities and average edge existence
-    df['bin'] = pd.cut(df['similarity'], bins=10)
-    bin_means = df.groupby('bin')['edge'].mean()
+    # Mean and std across runs
+    mean_bin_means = np.mean(all_bin_means, axis=0)
+    std_bin_means = np.std(all_bin_means, axis=0)
 
-    # Plot
-    bin_means.plot(kind='bar', color='skyblue', edgecolor='black')
+    # Bin labels (same across runs)
+    bin_labels = bin_means.index.astype(str)
+
+    # Plot with std "brackets" (error bars)
+    x = np.arange(len(bin_labels))
+    plt.figure(figsize=(10, 6))
+    plt.bar(x, mean_bin_means, yerr=std_bin_means, capsize=5,
+            color='skyblue', edgecolor='black', alpha=0.8)
+
     plt.ylabel("Probability of edge existence")
     plt.xlabel("Jaccard similarity bin")
-    plt.title("Edge Likelihood vs. Jaccard Similarity")
-    plt.xticks(rotation=45)
+    plt.title("Social graph creation algorithm")
+    plt.xticks(x, bin_labels, rotation=45)
     plt.tight_layout()
     plt.show()
 
-    return df, bin_means, 
+    return df, bin_means 
 
 def random_vs_nonrandom_seeds(num_comparisons):
     repeat = 10
     infections_random = []
     infections_nonrandom = []
+
+    # List nodes by degree:
+    degree_dict = dict(contact_network.degree())
+    sorted_nodes = sorted(degree_dict, key=degree_dict.get, reverse=True)
+
+    print("Nodes sorted by degree: ", sorted_nodes)
+
+    random_seeds = [random.choice(list(contact_network.nodes())) for _ in range(num_comparisons)]
+    non_random_seeds = find_seeds.find_seed_set(deepcopy(contact_network), num_seeds=num_comparisons, exponent=20)
+
     for i in range(1, num_comparisons+1):
         print("Run #: ", i)
+        
         inner_random_avg = []
         for _ in range(repeat):
-            # Random seed selection
             data_random = SIR.Simulate_SIR(
                 contact_network=deepcopy(contact_network),
                 social_network=deepcopy(social_network),
                 T=T, Repeat=Repeat,
-                beta=beta, gamma=gamma, mu=mu, init=init, q=True,
+                beta=beta, gamma=gamma, mu=mu, init=init, q="r",
                 allow_restoration=True,
-                num_seeds=(i, "r")  # Randomly select 5 seeds
+                seeds=random_seeds[:i]
             )[2]
-            inner_random_avg.append(data_random[1])
-        infections_random.append(np.mean(inner_random_avg, axis=0))
+            inner_random_avg.append(np.mean(data_random[1]))
+        infections_random.append(inner_random_avg)
 
         inner_nonrandom_avg = []
         for _ in range(repeat):
-            # Non-random seed selection
             data_nonrandom = SIR.Simulate_SIR(
                 contact_network=deepcopy(contact_network),
                 social_network=deepcopy(social_network),
                 T=T, Repeat=Repeat,
-                beta=beta, gamma=gamma, mu=mu, init=init, q=True,
+                beta=beta, gamma=gamma, mu=mu, init=init, q="r",
                 allow_restoration=True,
-                num_seeds=(i, "f")  # Select top 5 seeds based on degree
+                seeds=non_random_seeds[:i]
             )[2]
-            inner_nonrandom_avg.append(data_nonrandom[1])
-        infections_nonrandom.append(np.mean(inner_nonrandom_avg, axis=0))
+            inner_nonrandom_avg.append(np.mean(data_nonrandom[1]))
+        infections_nonrandom.append(inner_nonrandom_avg)
 
-    # Extract the scalar mean that represents average infection over time under the given seed configuration
-    avg_infections_random = [np.mean(data) for data in infections_random]
-    avg_infections_nonrandom = [np.mean(data) for data in infections_nonrandom]
+    # Compute means and stds
+    avg_infections_random = [np.mean(run) for run in infections_random]
+    std_infections_random = [np.std(run) for run in infections_random]
+
+    avg_infections_nonrandom = [np.mean(run) for run in infections_nonrandom]
+    std_infections_nonrandom = [np.std(run) for run in infections_nonrandom]
+
+    # Plotting as bar chart with error bars
+    x = np.arange(1, num_comparisons+1)
+    width = 0.35
 
     plt.figure(figsize=(12, 6))
-    plt.plot(range(1, len(avg_infections_random)+1), avg_infections_random,
-            label='Random Seeds', alpha=0.7, color='orange',
-            marker='o', linestyle='None') 
-    plt.plot(range(1, len(avg_infections_nonrandom)+1), avg_infections_nonrandom,
-            label='Non-Random Seeds', alpha=0.7, color='blue',
-            marker='o', linestyle='None')
-    plt.xlabel('Comparison Index')
-    plt.ylabel('Avg # of Infected')
-    plt.title('Random vs Non-Random Seed Selection')
+    plt.bar(x - width/2, avg_infections_random, width,
+            yerr=std_infections_random, capsize=5, label="Random Seeds", color="orange", alpha=0.7)
+    plt.bar(x + width/2, avg_infections_nonrandom, width,
+            yerr=std_infections_nonrandom, capsize=5, label="Non-Random Seeds", color="blue", alpha=0.7)
+    plt.ylim(25, max(max(avg_infections_random), max(avg_infections_nonrandom)) + 5)
+    plt.xlabel("Comparison Index (# of Seeds)")
+    plt.ylabel("Avg # of Infected")
+    plt.title("Random vs Non-Random Seed Selection")
     plt.legend()
-    plt.grid(True)
+    plt.grid(axis="y", linestyle="--", alpha=0.7)
     plt.show()
 
 # Pickle results from the functions
@@ -318,5 +341,65 @@ def pickle_load(filename='experiment_data/pickles.pkl'):
 
     # Now `data` holds the deserialized object
     print(data)
+
+def compare_infections_adherence(adherence):
+    num_trials = 10
+
+    T_runs = []
+    Y_runs_full_adherence = []
+    Y_runs_partial_adherence = []
+
+    for i in range(num_trials):
+        print("Run #: ", i)
+
+        # With constant quarantine
+        data1 = SIR.Simulate_SIR(
+            contact_network=deepcopy(contact_network),
+            social_network=deepcopy(social_network),
+            T=T, Repeat=Repeat,
+            beta=beta, gamma=gamma, mu=mu, init=init, q="r",
+            allow_restoration=True
+        )[2]
+        T_runs.append(data1[0])
+        Y_runs_full_adherence.append(data1[1])
+
+        # Without quarantine
+        data2 = SIR.Simulate_SIR(
+            contact_network=deepcopy(contact_network),
+            social_network=deepcopy(social_network),
+            T=T, Repeat=Repeat,
+            beta=beta, gamma=gamma, mu=mu, init=init,q="r",
+            allow_restoration=True, adherence=adherence
+        )[2]
+        Y_runs_partial_adherence.append(data2[1])
+
+    x = T_runs[0]
+    y_full = np.array(Y_runs_full_adherence)
+    y_partial = np.array(Y_runs_partial_adherence)
+
+    mean_full = np.mean(y_full, axis=0)
+    std_full = np.std(y_full, axis=0)
+
+    mean_partial = np.mean(y_partial, axis=0)
+    std_partial = np.std(y_partial, axis=0)
+
+    plt.plot(x, mean_full, label=f'With full adherence', color='blue')
+    plt.fill_between(x, mean_full - std_full, mean_full + std_full, color='blue', alpha=0.3)
+
+    plt.plot(x, mean_partial, label='With partial adherence', color='red')
+    plt.fill_between(x, mean_partial - std_partial, mean_partial + std_partial, color='red', alpha=0.3)
+
+    plt.xlabel('Time')
+    plt.ylabel('# of Infected')
+    plt.title('SIR with Constant Quarantine')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+    return (x, mean_full, std_full), (x, mean_partial, std_partial)
+
+# compare_infections_adherence(0.75)
+
+# plot_jaccard_similarity()
 
 random_vs_nonrandom_seeds(4)

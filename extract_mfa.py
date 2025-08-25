@@ -7,13 +7,13 @@ import os
 import re
 
 # plot_opt = True -> Plot optimization results for 1 sample (no splitting the optimization) 
-plot_opt = False
+plot_opt = True
 plot_opt_real_world = False  # Plot optimization results for 1 sample, but with real-world data (Ex. Covid csv file)
 show_adherence = False
 plot_split_opt = False  #  Plot average results for 1 configuration, but with splitting the optimization
 plot_many_non_split = False  # Plot many <k> estimates without splitting
 show_independence_k = False  # Show that <k> is independent of SIRS parameters when adherence = 0
-analyze_quarantine_dynamics = True  # Compare ideal vs actual quarantine dynamics from I(t), R(t), <k> estimated
+analyze_quarantine_dynamics = False # Compare ideal vs actual quarantine dynamics from I(t), R(t), <k> estimated
 
 #----------
 #
@@ -86,14 +86,14 @@ def parse_sample_data(filename):
     return samples
 
 def plot_sample(sample, sample_num):
-    # Plot Mean Node Degree (w1)
+    # --- Plot Mean Node Degree (w1) ---
     plt.figure(figsize=(10, 6))
 
     if 'w1 True (Mean Node Degree)' in sample:
         plt.plot(
             sample['w1 True (Mean Node Degree)']['x'],
             sample['w1 True (Mean Node Degree)']['y'],
-            label='w1 True (Mean Node Degree)',
+            label='Ground truth',
             color='#1f77b4',
             linestyle='-'
         )
@@ -102,19 +102,31 @@ def plot_sample(sample, sample_num):
         plt.plot(
             sample['w1 Estimated']['x'],
             sample['w1 Estimated']['y'],
-            label='w1 Estimated',
+            label='Estimated',
             color='#ff7f0e',
             linestyle='--'
         )
 
-    plt.xlabel('Time')
-    plt.ylabel('Mean Node Degree')
-    plt.title(f'Sample {sample_num}: w1 True vs Estimated')
+    # Add std band for w1 (from all runs)
+    if 'w1 all runs' in sample:
+        x = np.array(sample['w1 all runs']['x'])
+        y_runs = np.array(sample['w1 all runs']['y'])  # shape: (num_runs, time_points)
+        mean_y = np.mean(y_runs, axis=0)
+        std_y = np.std(y_runs, axis=0)
+
+        plt.fill_between(
+            x, mean_y - std_y, mean_y + std_y,
+            color='#ff7f0e', alpha=0.2, label='Estimate ± 1 std'
+        )
+
+    plt.xlabel('Time (in days)')
+    plt.ylabel('M.N.D. estimated')
+    plt.title('Mean node degree estimated vs ground truth')
     plt.legend()
     plt.grid(True)
     plt.show()
 
-    # Plot Recovered Fraction (w2)
+    # --- Plot Recovered Fraction (w2) ---
     plt.figure(figsize=(10, 6))
 
     if 'w2 True (Recovered Fraction)' in sample:
@@ -135,13 +147,24 @@ def plot_sample(sample, sample_num):
             linestyle='--'
         )
 
+    # Add std band for w2 (from all runs)
+    if 'w2 all runs' in sample:
+        x = np.array(sample['w2 all runs']['x'])
+        y_runs = np.array(sample['w2 all runs']['y'])
+        mean_y = np.mean(y_runs, axis=0)
+        std_y = np.std(y_runs, axis=0)
+
+        plt.fill_between(
+            x, mean_y - std_y, mean_y + std_y,
+            color='#d62728', alpha=0.2, label='w2 ± 1 std'
+        )
+
     plt.xlabel('Time')
     plt.ylabel('Recovered Fraction')
     plt.title(f'Sample {sample_num}: w2 True vs Estimated')
     plt.legend()
     plt.grid(True)
     plt.show()
-
 
 if plot_opt == True:
     # Main execution
@@ -432,11 +455,11 @@ if analyze_quarantine_dynamics == True:
     # We say that our <k>'s are determined using the first run of SIRS
     #   We can't average this, as the k vector may be of different lengths for different runs 
     #     (recall sufficient I(t) to continue optimizer)
-    k_0 = samples[0]['w1 Estimated']['y'][-1]
-    # k_0 = samples[0]['w1 True (Mean Node Degree)']['y'][-1]
+    # k_0 = samples[0]['w1 Estimated']['y'][-1]
+    k_0 = samples[0]['w1 True (Mean Node Degree)']['y'][-1]
     # m.n.d. after quarantining is observed
-    k_q = samples[1]['w1 Estimated']['y'][-1]
-    # k_q = samples[1]['w1 True (Mean Node Degree)']['y'][-1]
+    # k_q = samples[1]['w1 Estimated']['y'][-1]
+    k_q = samples[1]['w1 True (Mean Node Degree)']['y'][-1]
 
     # Clear infected_recovered.txt
     with open("experiment_data/infected_recovered.txt", "w") as f:
@@ -454,17 +477,32 @@ if analyze_quarantine_dynamics == True:
         # Run mean_field_approx.py to populate infected_recovered.txt
         os.system("python mean_field_approx.py")
         
+        # Read from infected_recovered.txt
         split_point, total_nodes, before_list, after_list = split_triples_from_file()
         avg_before_lst.append(before_list)
         avg_after_lst.append(after_list)
 
-        # Clear infected_recovered.txt
+        # Clear infected_recovered.txt for next iteration
         with open("experiment_data/infected_recovered.txt", "w") as f:
             f.truncate(0)
 
-    before_list = np.mean(avg_before_lst, axis=0)
-    after_list = np.mean(avg_after_lst, axis=0)
+    # avg_before_lst has form: [[(day, infected, recovered), ...], ... ]
+    # We need to keep days the same, and infected, recovered should be averaged along axis=0
     full_list = before_list + after_list
+
+    def average_triple_lists(list_of_lists):
+        # list_of_lists = [ [(t, inf, rec), (t, inf, rec), ...], ... ]
+        avg_list = []
+        for triples in zip(*list_of_lists):  # groups across runs
+            times = [t for (t, _, _) in triples]
+            assert len(set(times)) == 1  # sanity check: times match
+            t = times[0]
+            infs = [inf for (_, inf, _) in triples]
+            recs = [rec for (_, _, rec) in triples]
+            avg_list.append((t, np.mean(infs), np.mean(recs)))
+        return avg_list
+
+    full_list = average_triple_lists(avg_before_lst) + average_triple_lists(avg_after_lst)
 
     def plot_daily_infections():
         days = [t[0] for t in full_list]
@@ -496,7 +534,10 @@ if analyze_quarantine_dynamics == True:
     # Expected <k> at each time point under full adherence
     expected_k = (1 / len(k_effective)) * sum(k_effective)
 
-    # adherence = 1 - (k_q - expected_k) / k_q if k_q != 0 else 0
-    adherence = 1 - (expected_k - k_q) / expected_k if expected_k != 0 else 0
+    adherence = 1 - (k_q - expected_k) / k_q if k_q != 0 else 0
+    # adherence = 1 - (expected_k - k_q) / expected_k if expected_k != 0 else 0
 
     print("Adherence, new formulation: ", adherence)
+
+    with open("experiment_data/mfa_xy_data.txt", "w") as f:
+        f.truncate(0)

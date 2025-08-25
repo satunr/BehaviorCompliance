@@ -107,10 +107,10 @@ def restore_edges(g_init, g, node):
 # save_all: Returns large array containing quarantine states at every time interval
 # lt_threshold: Set to none for independent cascade model, or an int value for linear threshold model
 # adherence: Set to a float value between 0 and 1. Ratio of individuals that will adhere to quarantine measures.
-# num_seeds: ("f", <int>) for algorithmic selection (degree-based) by default, or ("r", <int>) for random seed selection
+# seeds: a list of seed nodes
 # NOTE: average_data only averages infection numbers. May be removed in the future.
-def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,average_data=False,
-                 q=False,allow_restoration=False,save_all=False,lt_threshold=None,adherence=None,begin_q=0,num_seeds=None):
+def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,
+                 q=False,allow_restoration=False,save_all=False,lt_threshold=None,adherence=None,begin_q=0,seeds=None):
     if begin_q is None:
         begin_q = 0
 
@@ -118,7 +118,6 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
         social_network = correlated_graphs.create_social_graph(contact_network)[0]
 
     n = len(contact_network.nodes())
-    All_Init = {t: [] for t in range(T + 1)}
     for _ in range(Repeat):
         N = n - 1
         P = n - N
@@ -167,7 +166,7 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
 
         # By default, quarantine period ~ Normal
         else:
-            # d[i]: # of days individual i chooses to quarantine (or not quarantine if misinformed)
+            # d[i]: # of days individual i chooses to quarantine
             samples_array = np.random.normal(loc=14, scale=2, size=n)
             # Take abs. value of the quarantine period samples, and round to nearest int. val.
             d = [abs(round(x)) for x in samples_array]
@@ -200,19 +199,15 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
 
             #  People become aware of need to quarantine at time t==begin_q
             elif t == begin_q:
-                if num_seeds is None:
-                    num = find_seeds.find_seed_set(social_network, num_seeds=round(0.05 * len(social_network.nodes())), exponent=1)
-                    selection = "f"
-                    num_seeds = (num, selection)
-
                 # Get the initial set of informed nodes
+                if seeds is None:
+                    num_seeds = round(0.05 * len(social_network.nodes()))
+                    informed = find_seeds.find_seed_set(social_network, num_seeds=num_seeds, exponent=1)
+
+                else:
+                    informed = seeds
+
                 # Non-adhering can still be informed. It is assumed that information is diffused through them too
-                # If selection is not random ("f")
-                if num_seeds[1] == "f":
-                    informed = find_seeds.find_seed_set(social_network, num_seeds=num_seeds[0], exponent=1)
-                # If selection is random ("r")
-                elif num_seeds[1] == "r":
-                    informed = [random.choice(list(social_network.nodes())) for _ in range(num_seeds[0])]
 
                 # Set labels for informed set
                 for node in informed:
@@ -305,22 +300,6 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,aver
         y_data_inf = Inf  # Infection frequency
         infection_data.append(x_data)
         infection_data.append(y_data_inf)
-
-        # if average_data:
-        #     # Plot infection frequency
-        #     plt.plot([t for t in range(T + 1)], Inf, alpha=0.1)
-        #     for t in range(T + 1):
-        #         All_Init[t].append(Inf[t])
-
-        #     plt.plot([t for t in range(T + 1)],
-        #              [np.mean(All_Init[t]) for t in range(T + 1)], linewidth=3)
-        #     plt.xlabel('Time', fontsize=12)
-        #     plt.ylabel('Number of individuals', fontsize=12)
-        #     plt.ylim([0, 60])
-        #     plt.legend()
-        #     plt.tight_layout()
-        #     plt.savefig('Information.png')
-        #     plt.show()
     
     # Return the graph and the list of state change tuples, and all quarantine statuses (if applicable)
     if save_all == True:

@@ -6,7 +6,6 @@ import numpy as np
 from scipy.optimize import minimize
 import random
 import os
-import matplotlib.pyplot as plt
 
 #----------
 #
@@ -33,9 +32,9 @@ beta = 0.11
 gamma = 0.10
 mu = 0.10
 init = 0.10
-q = "r"
-adherence = 0.6  # Adherence = None -> Full adherence, otherwise it is a float between 0 and 1
-split_point = 25  # Set to None if you want to optimize over the full SIR simulation, or a specific time point to split the optimization
+q = True
+adherence = 0.8  # Adherence = None -> Full adherence, otherwise it is a float between 0 and 1
+split_point = None  # Set to None if you want to optimize over the full SIR simulation, or a specific time point to split the optimization
 
 # Clear data files
 def truncate_files():
@@ -120,6 +119,7 @@ def loss(params, w1_run_avg, prev_w2, T_gen, eps_w1, eps_w2):
 
     return ((y_pred - y_true(T_gen)) ** 2) + penalties
 
+total_time = T  # Save this value for writing daily infections, recoveries to file
 # Mean-field approximation loses accuracy for small i
 # -> Trim simulation; find where newly infected ratio < smallest_accurate_ratio
 start = 2  # Ignore insufficient numbers at the start. Experimentally determined.
@@ -129,6 +129,9 @@ for t in range(start, T):
     if i < smallest_accurate_ratio:
         T = t + 1
         break
+
+# Save the full time-series data so we can average out daily infected/recovered results elsewhere
+full_dynamics = deepcopy(true_dynamics)
 
 # Shorten true_dynamics and deg_lst to match new T, where optimizer is well-behaved
 true_dynamics = true_dynamics[:T]
@@ -334,16 +337,16 @@ def save_daily_infected_recovered():
         f.write("Day,Newly Infected,Newly Recovered\n")
         
         # Start from day 1 because day 0 has no "previous day" to compare against
-        for day in range(1, T):
+        for day in range(1, total_time):
             newly_infected = sum(
                 1
                 for node in contact_graph.nodes()
-                if true_dynamics[day][node] == 1 and true_dynamics[day - 1][node] != 1
+                if full_dynamics[day][node] == 1 and full_dynamics[day - 1][node] != 1
             )
             newly_recovered = sum(
                 1
                 for node in contact_graph.nodes()
-                if true_dynamics[day][node] == 2 and true_dynamics[day - 1][node] != 2
+                if full_dynamics[day][node] == 2 and full_dynamics[day - 1][node] != 2
             )
             
             f.write(f"{day},{newly_infected},{newly_recovered}\n")
