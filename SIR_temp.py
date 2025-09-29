@@ -73,7 +73,7 @@ def update_N_P(P, N, n, a=0.5, v=0.05):
 
 # g: A graph, (mean, std): Parameters assoc. with taking P(edge removal) as a normal dist. sample, 
 #   w/ threshold as another param.
-def quarantine_edge_removal(g, node, states, quarantine_statuses, already_quarantining):
+def quarantine_edge_removal(g, node, states, quarantine_statuses):
     # Boolean value; Checks if "Informed" is an attribute of the node under consideration
     is_informed = g.nodes[node].get('Informed?') == 'Informed'
     is_adhering = g.nodes[node].get('Adheres?') == 'Yes'
@@ -83,29 +83,21 @@ def quarantine_edge_removal(g, node, states, quarantine_statuses, already_quaran
         quarantine_statuses[node] = 1  # Set quarantine status to 1 (quarantining)
         # Get all neighbors of current node
         neighbors = list(g.neighbors(node))
-        # print("Number of neighbors to remove for node ", node, ": ", len(neighbors))
         # Remove edges to all neighbors
         for neighbor in neighbors:
             g.remove_edge(node, neighbor)
-
-        already_quarantining.append(node)
     
     return quarantine_statuses
         
-def restore_edges(g_init, g, node, already_quarantining):
+def restore_edges(g_init, g, node):
     # Determine connections that were removed
     initial_connections = [(node, neighbor) for neighbor in g_init.neighbors(node)]
     # Determine connections that are currently present
     final_connections = [(node, neighbor) for neighbor in g.neighbors(node)]
-    # Don't add back edges to neighbors that are still in quarantine
-    quarantining_neighbors = [(node, neighbor) for neighbor in g_init.neighbors(node) if neighbor in already_quarantining]
     # Find the difference between the two sets
-    set_diff = set(initial_connections) - set(final_connections) - set(quarantining_neighbors)
+    set_diff = set(initial_connections) - set(final_connections)
 
     g.add_edges_from(set_diff)
-
-    if node in already_quarantining:
-        already_quarantining.remove(node)
 
     return g
 
@@ -116,11 +108,9 @@ def restore_edges(g_init, g, node, already_quarantining):
 # lt_threshold: Set to none for independent cascade model, or an int value for linear threshold model
 # adherence: Set to a float value between 0 and 1. Ratio of individuals that will adhere to quarantine measures.
 # seeds: a list of seed nodes
+# NOTE: average_data only averages infection numbers. May be removed in the future.
 def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,
                  q=False,allow_restoration=False,save_all=False,lt_threshold=None,adherence=None,begin_q=0,seeds=None):
-    if social_network is not None:
-        assert contact_network.nodes() == social_network.nodes(), "Contact and social networks must have the same node set."
-
     if begin_q is None:
         begin_q = 0
 
@@ -136,9 +126,6 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,
         # Randomly select a subset of nodes that will not adhere to quarantine measures
         if adherence is not None:
             non_adhering = set(np.random.choice(contact_network.nodes(), size=int((1 - adherence) * n), replace=False))
-
-            adhering = set(contact_network.nodes()) - non_adhering
-            # print("Set of adhering nodes: ", adhering)
 
         # Set labels for non-adhering nodes
         for node in non_adhering:
@@ -198,10 +185,10 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,
 
         mean_node_degrees = []
 
-        # Save informed count over time
-        # Used when determining expected # of edges removed (extract_mfa.py)
-        informed_and_infected = []
-        already_quarantining = []
+        # Experiment: Determine how many individuals are informed at each time step -> run this over many simulations
+        # -> see how much variance there is in the number of informed individuals at each time step
+        # -> if variance is low, we can treat the number of informed individuals as a deterministic function of time
+        informed_over_time = []
 
         for t in range(T):
 
@@ -260,6 +247,8 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,
                 all_quaratines.append(quarantine_statuses.copy())
                 all_infections.append(state)
 
+            informed_over_time.append(len(informed))
+
             #--------
             #
             #  Make contact network changes
@@ -274,30 +263,8 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,
             copy_state = deepcopy(state)
             state = sirs_step(contact_network, state, L, beta, gamma, mu)
 
-
-
-
-            #------------
-            #
-            #  Temporary. Get rid of this as soon as possible
-            #
-            #------------
-
-            # List of nodes that would quarantine under ideal conditions
-            should_quarantine = []
-
             # Analyze state changes across all nodes
             for u in range(n):
-                # Boolean value; Checks if "Informed" is an attribute of the node under consideration
-                is_informed = contact_network.nodes[u].get('Informed?') == 'Informed'
-
-                if state[u] == 1 and is_informed == True and (u not in already_quarantining):
-                    should_quarantine.append(u)
-
-
-
-
-
                 # At t==0, the state transition logic will not suffice. So check if anyone needs to be quarantined
                 # Determine what quarantines need to be made
                 if copy_state[u] != state[u] or t == 0:
@@ -305,7 +272,7 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,
                     state_changes[u] = (u, state[u], t)
                     if q == True or q == "r":
                         # Side effect: Edge removal
-                        quarantine_statuses = quarantine_edge_removal(g=contact_network, node=u, states=state, quarantine_statuses=quarantine_statuses, already_quarantining=already_quarantining)
+                        quarantine_statuses = quarantine_edge_removal(g=contact_network, node=u, states=state, quarantine_statuses=quarantine_statuses)
 
                 # Determine what restorations need to be made
                 if q == True and contact_network.nodes[u]['Informed?'] == 'Informed' and (1 <= quarantine_statuses[u] <= d[u]):
@@ -315,13 +282,13 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,
                     if quarantine_statuses[u] >= d[u]:
                         quarantine_statuses[u] = 0   # Individual takes a break from quarantining
                         if allow_restoration:
-                            restore_edges(G_initial, contact_network, u, already_quarantining=already_quarantining)
+                            restore_edges(G_initial, contact_network, u)
 
                 elif q == "r" and state[u] == 2:
                     # If q is "r", restore edges immediately after recovery
-                    restore_edges(G_initial, contact_network, u, already_quarantining=already_quarantining)
+                    restore_edges(G_initial, contact_network, u)
                         
-            informed_and_infected.append(should_quarantine)
+                # state = sirs_step(contact_network, state, L, beta, gamma, mu)
 
             # Update infection count for plotting
             Inf.append(len([u for u in state.keys() if state[u] == 1]))
@@ -340,8 +307,50 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,
         y_data_inf = Inf  # Infection frequency
         infection_data.append(x_data)
         infection_data.append(y_data_inf)
+
+        # Write informed over time to experiment_data/temp_informed.txt
+        if len(informed_over_time) > 0:
+            with open("experiment_data/temp_informed.txt", "a") as f:
+                f.write(",".join(map(str, informed_over_time)) + "\n")
     
     # Return the graph and the list of state change tuples, and all quarantine statuses (if applicable)
     if save_all == True:
-        return contact_network, state_changes, infection_data, quarantine_prob_matrix, all_infections, social_network, mean_node_degrees, informed_and_infected
+        return contact_network, state_changes, infection_data, quarantine_prob_matrix, all_infections, social_network, mean_node_degrees
     return contact_network, state_changes, infection_data
+
+T = 125
+Repeat = 1
+beta = 0.11
+gamma = 0.10
+mu = 0.10
+init = 0.10
+q = True
+
+contact_network = nx.erdos_renyi_graph(125, 0.05, seed=42)
+
+for i in range(10):
+    print("Run #: ", i)
+    # Side effect: writes to experiment_data/temp_informed.txt
+    result = Simulate_SIR(contact_network=contact_network, social_network=None, T=T, Repeat=Repeat, beta=beta, gamma=gamma, mu=mu, init=init,
+                 q=q, allow_restoration=True, adherence=None)
+    
+# Read from experiment_data/temp_informed.txt and plot the results
+informed_data = []
+with open("experiment_data/temp_informed.txt", "r") as f:
+    for line in f:
+        informed_data.append(list(map(int, line.strip().split(","))))
+# Convert to numpy array for easier manipulation
+informed_array = np.array(informed_data)
+# Calculate mean and standard deviation across simulations
+mean_informed = np.mean(informed_array, axis=0)
+std_informed = np.std(informed_array, axis=0)
+# Plotting
+plt.figure(figsize=(10, 6))
+plt.plot(range(len(mean_informed)), mean_informed, label='Mean Informed Individuals', color='blue')
+plt.fill_between(range(len(mean_informed)), mean_informed - std_informed, mean_informed + std_informed, color='blue', alpha=0.2, label='±1 Std Dev')
+plt.xlabel('Time Steps')
+plt.ylabel('Number of Informed Individuals')
+plt.title('Mean Number of Informed Individuals Over Time with Std Dev')
+plt.legend()
+plt.grid()
+plt.show()

@@ -6,14 +6,21 @@ import ast
 import os
 import re
 
+#-----------
+#
+#  File purpose: Extract, plot, and analyze data for optimization results and adherence calculation
+#
+#-----------
+
 # plot_opt = True -> Plot optimization results for 1 sample (no splitting the optimization) 
-plot_opt = True
+plot_opt = False
 plot_opt_real_world = False  # Plot optimization results for 1 sample, but with real-world data (Ex. Covid csv file)
 show_adherence = False
 plot_split_opt = False  #  Plot average results for 1 configuration, but with splitting the optimization
 plot_many_non_split = False  # Plot many <k> estimates without splitting
 show_independence_k = False  # Show that <k> is independent of SIRS parameters when adherence = 0
-analyze_quarantine_dynamics = False # Compare ideal vs actual quarantine dynamics from I(t), R(t), <k> estimated
+analyze_quarantine_dynamics = True # Compare ideal vs actual quarantine dynamics from I(t), R(t), <k> estimated
+cc_function = False  # Experiment from 9/26/25 meeting. Add code at bottom of this file
 
 #----------
 #
@@ -22,24 +29,26 @@ analyze_quarantine_dynamics = False # Compare ideal vs actual quarantine dynamic
 #----------
 
 def parse_sample_data(filename):
+    """
+    Parse the MFA data file into a list of samples.
+    Handles:
+      - Numeric datasets (floats)
+      - 'w1 all runs' as a list of lists of floats
+      - 'Informed Over Time' as a list of lists or nested data
+      - 'Number of nodes' as an integer
+    """
     samples = []
     current_sample = {}
     current_dataset = None
     x_data = []
     y_data = []
-    
-    def parse_w1_all_runs_y_line(line):
-        # Remove "y:" prefix
-        y_str = line[2:].strip()
 
+    def parse_w1_all_runs_y_line(line):
+        y_str = line[2:].strip()
         # Remove np.float64(...) wrappers
         y_str_clean = re.sub(r'np\.float64\(([^)]+)\)', r'\1', y_str)
-
-        # Now safely evaluate the list of lists string
         try:
-            parsed = ast.literal_eval(y_str_clean)
-            # parsed is a list of lists of floats
-            return parsed
+            return ast.literal_eval(y_str_clean)
         except Exception as e:
             print(f"Error parsing w1 all runs y line: {e}")
             return []
@@ -47,42 +56,74 @@ def parse_sample_data(filename):
     with open(filename, 'r') as file:
         for line in file:
             line = line.strip()
+
+            # Start of new sample
             if line == "==New Sample==":
                 if current_dataset and x_data:
                     current_sample[current_dataset] = {'x': x_data, 'y': y_data}
-                    x_data = []
-                    y_data = []
+                    x_data, y_data = [], []
                 if current_sample:
                     samples.append(current_sample)
                     current_sample = {}
                 current_dataset = None
                 continue
-            
-            # Dataset names detection
-            if line.startswith("SIR Infections") or line.startswith("w1 True") or line.startswith("w1 Estimated") or line.startswith('w1 all runs') or line.startswith("w2 True") or line.startswith("w2 Estimated"):
+
+            # Detect Number of nodes line
+            if line.startswith("Number of nodes:"):
+                try:
+                    current_sample['Number of nodes'] = int(line.split(":")[1].strip())
+                except Exception as e:
+                    print(f"Error parsing Number of nodes: {e}")
+                    current_sample['Number of nodes'] = None
+                continue
+
+            # Detect dataset name lines
+            if line.startswith(("SIR Infections", "w1 True", "w1 Estimated",
+                                "w1 all runs", "w2 True", "w2 Estimated",
+                                "Informed and Infected Over Time")):
                 if current_dataset and x_data:
                     current_sample[current_dataset] = {'x': x_data, 'y': y_data}
-                    x_data = []
-                    y_data = []
+                    x_data, y_data = [], []
                 current_dataset = line.split(':')[0].strip()
                 continue
-            
+
+            # Parse x-data
             if line.startswith("x:"):
-                x_data = [float(x) for x in line[2:].split(',')]
-            
+                try:
+                    x_data = [float(x) for x in line[2:].split(',') if x]
+                except ValueError as e:
+                    print(f"Error parsing x-data: {e}")
+                    x_data = []
+
+            # Parse y-data
             elif line.startswith("y:"):
-                # Special case for w1 all runs
                 if current_dataset == 'w1 all runs':
                     y_data = parse_w1_all_runs_y_line(line)
+                elif current_dataset == 'Informed Over Time':
+                    # Evaluate as Python object (list of lists)
+                    try:
+                        y_data = ast.literal_eval(line[2:].strip())
+                    except Exception as e:
+                        print(f"Error parsing Informed Over Time: {e}")
+                        y_data = []
                 else:
-                    y_data = [float(y) for y in line[2:].split(',')]
-        
-        # Save last dataset of last sample
+                    raw = line[2:].strip()
+                    try:
+                        # If starts with '[', evaluate as a Python object (nested lists)
+                        if raw.startswith('['):
+                            y_data = ast.literal_eval(raw)
+                        else:
+                            y_data = [float(y) for y in raw.split(',') if y]
+                    except Exception as e:
+                        print(f"Error parsing y-data: {e}")
+                        y_data = []
+
+        # Save last dataset of the last sample
         if current_dataset and x_data:
             current_sample[current_dataset] = {'x': x_data, 'y': y_data}
         if current_sample:
             samples.append(current_sample)
-    
+
     return samples
 
 def plot_sample(sample, sample_num):
@@ -447,8 +488,9 @@ def split_triples_from_file(filename="experiment_data/infected_recovered.txt"):
     
     return split_point, total_nodes, before, after
 
+# To run this, the configuration must have a split point
 if analyze_quarantine_dynamics == True:
-    num_runs = 5  # Number of runs for SIRS so we can average results for daily infections, daily recoveries
+    # num_runs = 1  # Number of runs for SIRS so we can average results for daily infections, daily recoveries
     samples = parse_sample_data("experiment_data/mfa_xy_data.txt")
     
     # m.n.d. before quarantining is observed
@@ -461,83 +503,42 @@ if analyze_quarantine_dynamics == True:
     # k_q = samples[1]['w1 Estimated']['y'][-1]
     k_q = samples[1]['w1 True (Mean Node Degree)']['y'][-1]
 
-    # Clear infected_recovered.txt
+    # Informed over time for first sample (no quarantine) will be 0. This variable is for after quarantining begins
+    informed_and_infected = samples[1]['Informed and Infected Over Time']['y']
+    post_q_infections = samples[1]['SIR Infections (Inset)']['y']
+    population = samples[0]['Number of nodes']
+
+    # # Clear infected_recovered.txt
     with open("experiment_data/infected_recovered.txt", "w") as f:
         f.truncate(0)
 
-    # Recall that the true split_point will be split_point + 1
-    split_point = None
-    total_nodes = None
-    avg_before_lst = []
-    avg_after_lst = []
-    for i in range(num_runs):
-        # Progress message
-        print("Current run: ", i)
-
-        # Run mean_field_approx.py to populate infected_recovered.txt
-        os.system("python mean_field_approx.py")
-        
-        # Read from infected_recovered.txt
-        split_point, total_nodes, before_list, after_list = split_triples_from_file()
-        avg_before_lst.append(before_list)
-        avg_after_lst.append(after_list)
-
-        # Clear infected_recovered.txt for next iteration
-        with open("experiment_data/infected_recovered.txt", "w") as f:
-            f.truncate(0)
-
-    # avg_before_lst has form: [[(day, infected, recovered), ...], ... ]
-    # We need to keep days the same, and infected, recovered should be averaged along axis=0
-    full_list = before_list + after_list
-
-    def average_triple_lists(list_of_lists):
-        # list_of_lists = [ [(t, inf, rec), (t, inf, rec), ...], ... ]
-        avg_list = []
-        for triples in zip(*list_of_lists):  # groups across runs
-            times = [t for (t, _, _) in triples]
-            assert len(set(times)) == 1  # sanity check: times match
-            t = times[0]
-            infs = [inf for (_, inf, _) in triples]
-            recs = [rec for (_, _, rec) in triples]
-            avg_list.append((t, np.mean(infs), np.mean(recs)))
-        return avg_list
-
-    full_list = average_triple_lists(avg_before_lst) + average_triple_lists(avg_after_lst)
-
-    def plot_daily_infections():
-        days = [t[0] for t in full_list]
-        infections = [t[1] for t in full_list]
-        plt.plot(days, infections, label='Daily Infections')
-        plt.xlabel('Days')
-        plt.ylabel('Number of Infections')
-        plt.title('Daily Infections Over Time')
-        plt.legend()
-        plt.show()
-
-    # plot_daily_infections()
-
-    # print("Split point:", split_point)
-    # print("Before:", before_list)
-    # print("After:", after_list)
     print("k_0:", k_0)
     print("k_q:", k_q)
-    print("Total nodes: ", total_nodes)
-
-    # I_t: Sum of newly infected up to t, minus sum of newly recovered up to t
-    # Approximate I(t) when only given daily data
-    def I(time):
-        return sum(full_list[i][1] for i in range(split_point, time)) - sum(full_list[i][2] for i in range(split_point, time))
 
     # Mean node degree if quarantine measures were followed 100%
-    k_effective = [k_0 * (1 - I(time) / total_nodes) for time in range(split_point, len(full_list))]
+    k_effective = [k_0 * ((1 - post_q_infections[time]) / population) * (post_q_infections[time] - len(informed_and_infected[time])) for time in range(len(informed_and_infected))]
 
     # Expected <k> at each time point under full adherence
     expected_k = (1 / len(k_effective)) * sum(k_effective)
 
-    adherence = 1 - (k_q - expected_k) / k_q if k_q != 0 else 0
-    # adherence = 1 - (expected_k - k_q) / expected_k if expected_k != 0 else 0
+    print("Expected <k> under full adherence: ", expected_k)
 
-    print("Adherence, new formulation: ", adherence)
+    adherence1 = 1 - (k_q - expected_k) / k_q if k_q != 0 else 0
+    adherence2 = 1 - (expected_k - k_q) / expected_k if expected_k != 0 else 0
+    adherence3 = (k_0 - k_q) / (k_0 - expected_k) if (k_0 - expected_k) != 0 else 0
+
+    print("Adherence1: " , adherence1)
+    print("Adherence2: " , adherence2)
+    print("Adherence3: " , adherence3)
 
     with open("experiment_data/mfa_xy_data.txt", "w") as f:
         f.truncate(0)
+
+if cc_function == True:
+    # This will parse your mean field approximation results from experiment_data/mfa_xy_data.txt
+    # To access any of the lists (or lists of lists), you can do something like:
+    #     samples[0]['w1 Estimated']['y'] for the FIRST sample's w1 (Mean Node Degree) estimated y values
+    #     samples[1]['w1 Estimated']['y'] for the SECOND sample's w1 (Mean Node Degree) estimated y values
+    samples = parse_sample_data("experiment_data/mfa_xy_data.txt")
+
+    # Do something with the samples here. Remember, if there's a split point, there will be 2 times the number of configurations you run

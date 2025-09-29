@@ -18,28 +18,30 @@ import os
 social_graph = None
 contact_graph = None
 
-# Generate contact and social graphs
-n = 125
-p = 0.05
+# Generate contact graph
+n = 125  # number of nodes
+p = 0.05  # probability of edge
 
 clear = False  # Set clear to True if you want to use a new network or clear data files. False if you want to keep the existing one.
 verbose = False  # Set verbose to True if you want to see detailed output during optimization
 
 # Simulation parameters
-T = 125
+T = 100
 Repeat = 1
 beta = 0.11
 gamma = 0.10
 mu = 0.10
-init = 0.10
-q = True
-adherence = 0.8  # Adherence = None -> Full adherence, otherwise it is a float between 0 and 1
-split_point = None  # Set to None if you want to optimize over the full SIR simulation, or a specific time point to split the optimization
+init = 0.15 # Initial infected portion
+q = "r"
+adherence = 0.7  # Adherence = None -> Full adherence, otherwise it is a float between 0 and 1
+split_point = 25  # Set to None if you want to optimize over the full SIR simulation, or a specific time point to split the optimization
+seeds = None  # Set to None for random seeds, or a list of node IDs to use as seeds. Ex. [0, 1, 2] for nodes 0, 1, and 2 as seeds
+density_social = None  # Set to None for default density, or an integer number of edges in the social graph
 
 # Clear data files
 def truncate_files():
     files_to_truncate = ["experiment_data/mfa_contact.gml", "experiment_data/mfa_social.gml", 
-                         "experiment_data/mfa_xy_data.pkl"]
+                         "experiment_data/mfa_xy_data.txt"]
     for file in files_to_truncate:
         if os.path.exists(file):
             with open(file, 'w') as f:
@@ -62,7 +64,7 @@ except (FileNotFoundError, OSError, ValueError, nx.NetworkXError) as e:
     print("No valid graphs found in mfa_*.gml. Generating new graphs.")
 
     contact_graph = nx.erdos_renyi_graph(n, p, seed=42)
-    social_graph = correlated_graphs.create_social_graph(contact_graph, nE=2 * len(contact_graph.edges()))[0]
+    social_graph = correlated_graphs.create_social_graph(contact_graph, nE=density_social)[0]
 
     nx.write_gml(contact_graph, "experiment_data/mfa_contact.gml")
     nx.write_gml(social_graph, "experiment_data/mfa_social.gml")
@@ -72,12 +74,14 @@ SIR_results = SIR.Simulate_SIR(
     social_network=deepcopy(social_graph),
     T=T, Repeat=Repeat,
     beta=beta, gamma=gamma, mu=mu, init=init,
-    average_data=False, q=q, allow_restoration=q, 
-    save_all=True, adherence=adherence, begin_q=split_point
+    q=q, allow_restoration=q, 
+    save_all=True, adherence=adherence, begin_q=split_point, 
+    seeds=seeds
 )
 
 deg_lst = SIR_results[6]
 true_dynamics = SIR_results[4]
+informed_over_time = SIR_results[7]
 
 def given_at_time(time):
     new_r_ratio = sum(1 for node in contact_graph.nodes() 
@@ -136,6 +140,9 @@ full_dynamics = deepcopy(true_dynamics)
 # Shorten true_dynamics and deg_lst to match new T, where optimizer is well-behaved
 true_dynamics = true_dynamics[:T]
 deg_lst = deg_lst[:T]
+
+# If split_point > T, indexxing issues will arise
+assert split_point <= T, "Split point must be less than or equal to T"
 
 if split_point is not None:
     seg1 = deg_lst[:split_point]
@@ -269,6 +276,9 @@ def save_xy_data(w1_avg=None, w2_avg=None, w1_all_runs=None, split=None):
     w2_est_y = w2_avg
     sir_infections_y = [sum(1 for node in contact_graph.nodes() if true_dynamics[t][node] == 1) for t in range(T)]
 
+    # Bring informed_over_time into
+    informed = deepcopy(informed_over_time)
+
     # Round to 2 decimal places where appropriate
     w1_est_y = [round(y, 2) for y in w1_est_y]
     w2_est_y = [round(y, 2) for y in w2_est_y]
@@ -281,10 +291,11 @@ def save_xy_data(w1_avg=None, w2_avg=None, w1_all_runs=None, split=None):
         if half == 1:
             x_ofs = 0  # Offset for generating x values for plotting
             sir_infections_y = sir_infections_y[:sp]
-            w1_true_y = w1_true_y[:sp-1]
-            w1_est_y = w1_est_y[:sp-1]
-            w2_true_y = w2_true_y[:sp-1]
-            w2_est_y = w2_est_y[:sp-1]
+            w1_true_y = w1_true_y[:sp]
+            w1_est_y = w1_est_y[:sp]
+            w2_true_y = w2_true_y[:sp]
+            w2_est_y = w2_est_y[:sp]
+            informed = informed[:sp]
         if half == 2:
             x_ofs = sp  # Offset for generating x values for plotting
             sir_infections_y = sir_infections_y[sp:]
@@ -292,9 +303,13 @@ def save_xy_data(w1_avg=None, w2_avg=None, w1_all_runs=None, split=None):
             w1_est_y = w1_est_y[sp:-1]
             w2_true_y = w2_true_y[sp:-1]
             w2_est_y = w2_est_y[sp:-1]
+            informed = informed[sp:-1]
 
     with open("experiment_data/mfa_xy_data.txt", "a") as f:
         f.write("==New Sample==\n")
+
+        f.write("Number of nodes: " + str(n) + "\n\n")
+
         f.write("SIR Infections (Inset):\n")
         f.write(f"x: {','.join(map(str, range(x_ofs, len(sir_infections_y) + x_ofs)))}\n")
         f.write(f"y: {','.join(map(str, sir_infections_y))}\n\n")
@@ -319,6 +334,11 @@ def save_xy_data(w1_avg=None, w2_avg=None, w1_all_runs=None, split=None):
         f.write("w2 Estimated:\n")
         f.write(f"x: {','.join(map(str, range(x_ofs, len(w2_est_y) + x_ofs)))}\n")
         f.write(f"y: {','.join(map(str, w2_est_y))}\n\n")
+
+        f.write("Informed and Infected Over Time:\n")
+        # Keep x values aligned with sir_infections_y; recall we only run the optimizer up to T where i sufficiently large
+        f.write(f"x: {','.join(map(str, range(x_ofs, len(sir_infections_y) + x_ofs)))}\n")
+        f.write(f"y: {','.join(map(str, informed[:len(sir_infections_y)]))}\n\n")
 
 if split_point is None:
     w1_run_avg, w2_run_avg, w1_all_runs = drive_optimizer(split_point=None)
