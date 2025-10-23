@@ -9,7 +9,7 @@ import os
 
 #----------
 #
-#  Mean-field approximation for SIR model: n_i = beta * <k> (1 - n_r / gamma - r) * n_r / gamma
+#  Mean-field approximation for SIR model: n_i = beta * <k> (1 - n_r / gamma - r) * (n_r / gamma)
 #  Assuming n_i, n_r, SIR parameters are known, this gives us the constrained, non-linear optimization problem:
 #    y = w1 * x1 * (x2 - w2), where <w1, w2> are the model weights to be learned (mean node degree, recovered ratio, respectively).
 #
@@ -31,9 +31,9 @@ Repeat = 1
 beta = 0.11
 gamma = 0.10
 mu = 0.10
-init = 0.15 # Initial infected portion
+init = 0.10 # Initial infected portion
 q = "r"
-adherence = 0.7  # Adherence = None -> Full adherence, otherwise it is a float between 0 and 1
+adherence = 0.6  # Adherence = None -> Full adherence, otherwise it is a float between 0 and 1
 split_point = 25  # Set to None if you want to optimize over the full SIR simulation, or a specific time point to split the optimization
 seeds = None  # Set to None for random seeds, or a list of node IDs to use as seeds. Ex. [0, 1, 2] for nodes 0, 1, and 2 as seeds
 density_social = None  # Set to None for default density, or an integer number of edges in the social graph
@@ -65,6 +65,7 @@ except (FileNotFoundError, OSError, ValueError, nx.NetworkXError) as e:
 
     contact_graph = nx.erdos_renyi_graph(n, p, seed=42)
     social_graph = correlated_graphs.create_social_graph(contact_graph, nE=density_social)[0]
+    # social_graph = nx.erdos_renyi_graph(n, p, seed=24, directed=True)
 
     nx.write_gml(contact_graph, "experiment_data/mfa_contact.gml")
     nx.write_gml(social_graph, "experiment_data/mfa_social.gml")
@@ -80,8 +81,9 @@ SIR_results = SIR.Simulate_SIR(
 )
 
 deg_lst = SIR_results[6]
+dynamic_deg = deepcopy(deg_lst)     # Degree list over time. Will be used when calculating adherence(time) in extract_mfa.py
 true_dynamics = SIR_results[4]
-informed_over_time = SIR_results[7]
+informed_and_infected = SIR_results[7]
 
 def given_at_time(time):
     new_r_ratio = sum(1 for node in contact_graph.nodes() 
@@ -126,8 +128,8 @@ def loss(params, w1_run_avg, prev_w2, T_gen, eps_w1, eps_w2):
 total_time = T  # Save this value for writing daily infections, recoveries to file
 # Mean-field approximation loses accuracy for small i
 # -> Trim simulation; find where newly infected ratio < smallest_accurate_ratio
-start = 2  # Ignore insufficient numbers at the start. Experimentally determined.
-smallest_accurate_ratio = 0.1  # Minimum ratio of infected nodes to total nodes to consider the simulation accurate. Experimentally determined.
+start = 5  # Ignore insufficient numbers at the start. Experimentally determined.
+smallest_accurate_ratio = 0.05  # Minimum ratio of infected nodes to total nodes to consider the simulation accurate. Experimentally determined.
 for t in range(start, T):
     i = sum(1 for node in contact_graph.nodes() if true_dynamics[t][node] == 1) / len(contact_graph.nodes())
     if i < smallest_accurate_ratio:
@@ -268,16 +270,17 @@ def drive_optimizer(split_point=None):
 # Save to mfa_xy_data.txt
 # This is for single runs under a given SIR configuration
 # Split: Tuple (split_point, half), where split_point is the time to split the optimization, and half is either 1 or 2
-def save_xy_data(w1_avg=None, w2_avg=None, w1_all_runs=None, split=None):
+def save_xy_data(dynamic_deg=None, w1_avg=None, w2_avg=None, w1_all_runs=None, split=None):
     # Compute y values
     w1_true_y = [true_w[t][0] for t in range(T)]
     w1_est_y = w1_avg
     w2_true_y = [true_w[t][1] for t in range(T)]
     w2_est_y = w2_avg
-    sir_infections_y = [sum(1 for node in contact_graph.nodes() if true_dynamics[t][node] == 1) for t in range(T)]
+    sir_infections_y = [sum(1 for node in contact_graph.nodes() if true_dynamics[t][node] == 1) for t in range(len(true_dynamics))]
 
-    # Bring informed_over_time into
-    informed = deepcopy(informed_over_time)
+    # Bring informed_and_infected into local scope
+    i_and_inf = deepcopy(informed_and_infected)
+    i_and_inf = [len(i_and_inf[t]) for t in range(len(i_and_inf))]
 
     # Round to 2 decimal places where appropriate
     w1_est_y = [round(y, 2) for y in w1_est_y]
@@ -291,28 +294,35 @@ def save_xy_data(w1_avg=None, w2_avg=None, w1_all_runs=None, split=None):
         if half == 1:
             x_ofs = 0  # Offset for generating x values for plotting
             sir_infections_y = sir_infections_y[:sp]
+            dynamic_deg = dynamic_deg[:sp]
             w1_true_y = w1_true_y[:sp]
             w1_est_y = w1_est_y[:sp]
             w2_true_y = w2_true_y[:sp]
             w2_est_y = w2_est_y[:sp]
-            informed = informed[:sp]
+            i_and_inf = i_and_inf[:sp]
         if half == 2:
             x_ofs = sp  # Offset for generating x values for plotting
             sir_infections_y = sir_infections_y[sp:]
-            w1_true_y = w1_true_y[sp:-1]
-            w1_est_y = w1_est_y[sp:-1]
-            w2_true_y = w2_true_y[sp:-1]
-            w2_est_y = w2_est_y[sp:-1]
-            informed = informed[sp:-1]
+            dynamic_deg = dynamic_deg[sp:]
+            w1_true_y = w1_true_y[sp:]
+            w1_est_y = w1_est_y[sp:]
+            w2_true_y = w2_true_y[sp:]
+            w2_est_y = w2_est_y[sp:]
+            i_and_inf = i_and_inf[sp:]
 
     with open("experiment_data/mfa_xy_data.txt", "a") as f:
         f.write("==New Sample==\n")
 
         f.write("Number of nodes: " + str(n) + "\n\n")
+        f.write("Adhering proportion: " + str(adherence) + "\n\n")
 
         f.write("SIR Infections (Inset):\n")
         f.write(f"x: {','.join(map(str, range(x_ofs, len(sir_infections_y) + x_ofs)))}\n")
         f.write(f"y: {','.join(map(str, sir_infections_y))}\n\n")
+
+        f.write("Dynamic degree over time:\n")
+        f.write(f"x: {','.join(map(str, range(x_ofs, len(dynamic_deg) + x_ofs)))}\n")
+        f.write(f"y: {','.join(map(str, dynamic_deg))}\n\n")
 
         f.write("w1 True (Mean Node Degree):\n")
         f.write(f"x: {','.join(map(str, range(x_ofs, len(w1_true_y) + x_ofs)))}\n")
@@ -337,16 +347,16 @@ def save_xy_data(w1_avg=None, w2_avg=None, w1_all_runs=None, split=None):
 
         f.write("Informed and Infected Over Time:\n")
         # Keep x values aligned with sir_infections_y; recall we only run the optimizer up to T where i sufficiently large
-        f.write(f"x: {','.join(map(str, range(x_ofs, len(sir_infections_y) + x_ofs)))}\n")
-        f.write(f"y: {','.join(map(str, informed[:len(sir_infections_y)]))}\n\n")
+        f.write(f"x: {','.join(map(str, range(x_ofs, len(i_and_inf) + x_ofs)))}\n")
+        f.write(f"y: {','.join(map(str, i_and_inf[:len(i_and_inf)]))}\n\n")
 
 if split_point is None:
     w1_run_avg, w2_run_avg, w1_all_runs = drive_optimizer(split_point=None)
     save_xy_data(w1_avg=w1_run_avg, w2_avg=w2_run_avg, w1_all_runs=w1_all_runs)
 else:
     w1_avg1, w2_avg1, w1_avg2, w2_avg2 = drive_optimizer(split_point=split_point)
-    save_xy_data(w1_avg=w1_avg1, w2_avg=w2_avg1, split=(split_point, 1))
-    save_xy_data(w1_avg=w1_avg2, w2_avg=w2_avg2, split=(split_point, 2))
+    save_xy_data(dynamic_deg=dynamic_deg, w1_avg=w1_avg1, w2_avg=w2_avg1, split=(split_point, 1))
+    save_xy_data(dynamic_deg=dynamic_deg, w1_avg=w1_avg2, w2_avg=w2_avg2, split=(split_point, 2))
 
 # Save daily infected and daily recovered counts to file
 # Will be used in comparing ideal vs actual quarantine dynamics

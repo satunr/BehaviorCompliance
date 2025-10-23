@@ -20,7 +20,7 @@ plot_split_opt = False  #  Plot average results for 1 configuration, but with sp
 plot_many_non_split = False  # Plot many <k> estimates without splitting
 show_independence_k = False  # Show that <k> is independent of SIRS parameters when adherence = 0
 analyze_quarantine_dynamics = True # Compare ideal vs actual quarantine dynamics from I(t), R(t), <k> estimated
-cc_function = False  # Experiment from 9/26/25 meeting. Add code at bottom of this file
+new_function = False  # Experiment from 9/26/25 meeting. Add code at bottom of this file
 
 #----------
 #
@@ -77,8 +77,17 @@ def parse_sample_data(filename):
                     current_sample['Number of nodes'] = None
                 continue
 
+            # Detect true adherence proportion
+            if line.startswith("Adhering proportion:"):
+                try:
+                    current_sample['Adhering proportion'] = float(line.split(":")[1].strip())
+                except Exception as e:
+                    print(f"Error parsing Adhering proportion: {e}")
+                    current_sample['Adhering proportion'] = None
+                continue
+
             # Detect dataset name lines
-            if line.startswith(("SIR Infections", "w1 True", "w1 Estimated",
+            if line.startswith(("SIR Infections", "Dynamic degree over time", "w1 True", "w1 Estimated",
                                 "w1 all runs", "w2 True", "w2 Estimated",
                                 "Informed and Infected Over Time")):
                 if current_dataset and x_data:
@@ -490,51 +499,136 @@ def split_triples_from_file(filename="experiment_data/infected_recovered.txt"):
 
 # To run this, the configuration must have a split point
 if analyze_quarantine_dynamics == True:
-    # num_runs = 1  # Number of runs for SIRS so we can average results for daily infections, daily recoveries
     samples = parse_sample_data("experiment_data/mfa_xy_data.txt")
     
-    # m.n.d. before quarantining is observed
-    # We say that our <k>'s are determined using the first run of SIRS
-    #   We can't average this, as the k vector may be of different lengths for different runs 
-    #     (recall sufficient I(t) to continue optimizer)
     # k_0 = samples[0]['w1 Estimated']['y'][-1]
     k_0 = samples[0]['w1 True (Mean Node Degree)']['y'][-1]
     # m.n.d. after quarantining is observed
     # k_q = samples[1]['w1 Estimated']['y'][-1]
     k_q = samples[1]['w1 True (Mean Node Degree)']['y'][-1]
+    adhering_proportion = samples[1]['Adhering proportion']
 
     # Informed over time for first sample (no quarantine) will be 0. This variable is for after quarantining begins
-    informed_and_infected = samples[1]['Informed and Infected Over Time']['y']
-    post_q_infections = samples[1]['SIR Infections (Inset)']['y']
+    # informed_and_infected = samples[1]['Informed and Infected Over Time']['y']
+    # informed_and_infected = [samples[i]['Informed and Infected Over Time']['y'] for i in range(1, len(samples), 2)]
+    # informed_and_infected = np.mean(informed_and_infected, axis=0)  # Average over all runs after quarantine
     population = samples[0]['Number of nodes']
-
-    # # Clear infected_recovered.txt
-    with open("experiment_data/infected_recovered.txt", "w") as f:
-        f.truncate(0)
 
     print("k_0:", k_0)
     print("k_q:", k_q)
 
-    # Mean node degree if quarantine measures were followed 100%
-    k_effective = [k_0 * ((1 - post_q_infections[time]) / population) * (post_q_infections[time] - len(informed_and_infected[time])) for time in range(len(informed_and_infected))]
+    def k_effective_calc(informed_and_infected, current_time):
+        assert current_time < len(informed_and_infected) + 1, "Current time exceeds data length"
 
-    # Expected <k> at each time point under full adherence
-    expected_k = (1 / len(k_effective)) * sum(k_effective)
+        k_effective = [k_0 * (1 - 2 * informed_and_infected[time] / population) for time in range(current_time)]
 
-    print("Expected <k> under full adherence: ", expected_k)
+        # Expected <k> at each time point under full adherence
+        expected_k = (1 / len(k_effective)) * sum(k_effective)
 
-    adherence1 = 1 - (k_q - expected_k) / k_q if k_q != 0 else 0
-    adherence2 = 1 - (expected_k - k_q) / expected_k if expected_k != 0 else 0
-    adherence3 = (k_0 - k_q) / (k_0 - expected_k) if (k_0 - expected_k) != 0 else 0
+        print("Expected <k> under full adherence: ", expected_k)
 
-    print("Adherence1: " , adherence1)
-    print("Adherence2: " , adherence2)
-    print("Adherence3: " , adherence3)
+        return expected_k
 
-    with open("experiment_data/mfa_xy_data.txt", "w") as f:
-        f.truncate(0)
+    # expected_k = k_effective_calc(len(informed_and_infected))
 
-if cc_function == True:
+    # adherence1 = 1 - (k_q - expected_k) / k_q if k_q != 0 else 0
+    # adherence3 = (k_0 - k_q) / (k_0 - expected_k) if (k_0 - expected_k) != 0 else 0
+
+    # adherence1 = round(adherence1, 2)
+    # adherence3 = round(adherence3, 2)
+
+    # print("Adherence1: " , adherence1)
+    # print("Adherence3: " , adherence3)
+
+    collection_adherence_over_time = []
+    num_simulations = len(samples)
+    assert num_simulations % 2 == 0, f"Number of samples should be even for split optimizations. Number: {len(samples)}"
+    num_simulations = num_simulations / 2    # Only consider post-quarantining splits
+    num_simulations = int(num_simulations)
+
+    for i in range(num_simulations):
+        index = i * 2 + 1   # Only consider post-quarantining splits (odd indexed samples)
+
+        informed_and_infected = samples[index]['Informed and Infected Over Time']['y']
+        k_q_lst = samples[index]['Dynamic degree over time']['y']
+
+        assert len(informed_and_infected) == len(k_q_lst), f"Informed and Infected length must match Dynamic Degree length. {len(informed_and_infected)} != {len(k_q_lst)}"
+
+        # Running average adherence over time: should converge to true adherence
+        adherence_over_time = []
+        for t in range(1, len(informed_and_infected)):
+            k_eff_t = k_effective_calc(informed_and_infected, t)
+            adherence_t = 1 - (k_q_lst[t] - k_eff_t) / k_q if k_q != 0 else 0
+            adherence_over_time.append(adherence_t)
+
+            # adherence_over_time.append(k_eff_t)
+    
+        collection_adherence_over_time.append(adherence_over_time)
+
+    # Calculate std deviation across simulations
+    adherence_over_time = np.mean(collection_adherence_over_time, axis=0)
+
+    # Plot adherence over time
+    plt.figure(figsize=(10, 6))
+    plt.plot(range(1, len(adherence_over_time) + 1), adherence_over_time, label='Adherence over time', color='#1f77b4')
+    # Plot between with standard deviation band
+    plt.fill_between(range(1, len(adherence_over_time) + 1),
+                     np.array(adherence_over_time) - np.std(collection_adherence_over_time, axis=0),
+                     np.array(adherence_over_time) + np.std(collection_adherence_over_time, axis=0),
+                     color='#1f77b4', alpha=0.2, label='Adherence ± 1 std')
+    plt.axhline(y=adhering_proportion, color='r', linestyle='--', label='True Adherence')
+    plt.xlabel('Time')
+    plt.ylabel('Calculated adherence')
+    plt.title('Adherence Estimation Over Time')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+    #-------------
+    #
+    #  Same code, but using the alternative measure for adherence
+    #
+    #-------------
+
+    for i in range(num_simulations):
+        index = i * 2 + 1   # Only consider post-quarantining splits (odd indexed samples)
+
+        informed_and_infected = samples[index]['Informed and Infected Over Time']['y']
+        k_q_lst = samples[index]['Dynamic degree over time']['y']
+
+        assert len(informed_and_infected) == len(k_q_lst), f"Informed and Infected length must match Dynamic Degree length. {len(informed_and_infected)} != {len(k_q_lst)}"
+
+        # Running average adherence over time: should converge to true adherence
+        adherence_over_time = []
+        for t in range(1, len(informed_and_infected)):
+            k_eff_t = k_effective_calc(informed_and_infected, t)
+            adherence_t = (k_0 - k_q_lst[t]) / (k_0 - k_eff_t) if k_0 != k_eff_t else 0
+            adherence_over_time.append(adherence_t)
+
+            # adherence_over_time.append(k_eff_t)
+    
+        collection_adherence_over_time.append(adherence_over_time)
+
+    # Calculate std deviation across simulations
+    adherence_over_time = np.mean(collection_adherence_over_time, axis=0)
+
+    # Plot adherence over time
+    plt.figure(figsize=(10, 6))
+    plt.plot(range(1, len(adherence_over_time) + 1), adherence_over_time, label='Adherence over time', color='#1f77b4')
+    # Plot between with standard deviation band
+    plt.fill_between(range(1, len(adherence_over_time) + 1),
+                     np.array(adherence_over_time) - np.std(collection_adherence_over_time, axis=0),
+                     np.array(adherence_over_time) + np.std(collection_adherence_over_time, axis=0),
+                     color='#1f77b4', alpha=0.2, label='Adherence ± 1 std')
+    plt.axhline(y=adhering_proportion, color='r', linestyle='--', label='True Adherence')
+    plt.xlabel('Time')
+    plt.ylabel('Calculated adherence')
+    plt.title('Adherence Estimation Over Time')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+if new_function == True:
     # This will parse your mean field approximation results from experiment_data/mfa_xy_data.txt
     # To access any of the lists (or lists of lists), you can do something like:
     #     samples[0]['w1 Estimated']['y'] for the FIRST sample's w1 (Mean Node Degree) estimated y values

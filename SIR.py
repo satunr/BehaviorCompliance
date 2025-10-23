@@ -83,7 +83,7 @@ def quarantine_edge_removal(g, node, states, quarantine_statuses, already_quaran
         quarantine_statuses[node] = 1  # Set quarantine status to 1 (quarantining)
         # Get all neighbors of current node
         neighbors = list(g.neighbors(node))
-        # print("Number of neighbors to remove for node ", node, ": ", len(neighbors))
+        print("Number of neighbors to remove for node ", node, ": ", len(neighbors))
         # Remove edges to all neighbors
         for neighbor in neighbors:
             g.remove_edge(node, neighbor)
@@ -93,14 +93,11 @@ def quarantine_edge_removal(g, node, states, quarantine_statuses, already_quaran
     return quarantine_statuses
         
 def restore_edges(g_init, g, node, already_quarantining):
-    # Determine connections that were removed
     initial_connections = [(node, neighbor) for neighbor in g_init.neighbors(node)]
-    # Determine connections that are currently present
-    final_connections = [(node, neighbor) for neighbor in g.neighbors(node)]
     # Don't add back edges to neighbors that are still in quarantine
     quarantining_neighbors = [(node, neighbor) for neighbor in g_init.neighbors(node) if neighbor in already_quarantining]
     # Find the difference between the two sets
-    set_diff = set(initial_connections) - set(final_connections) - set(quarantining_neighbors)
+    set_diff = set(initial_connections) - set(quarantining_neighbors)
 
     g.add_edges_from(set_diff)
 
@@ -132,13 +129,12 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,
         N = n - 1
         P = n - N
 
-        non_adhering = set()  # Set to hold nodes that do not adhere to quarantine measures
+        adhering = set()  # Set to hold nodes that do not adhere to quarantine measures
         # Randomly select a subset of nodes that will not adhere to quarantine measures
         if adherence is not None:
-            non_adhering = set(np.random.choice(contact_network.nodes(), size=int((1 - adherence) * n), replace=False))
+            adhering = set(np.random.choice(contact_network.nodes(), size=int((adherence) * n), replace=False))
 
-            adhering = set(contact_network.nodes()) - non_adhering
-            # print("Set of adhering nodes: ", adhering)
+        non_adhering = set(contact_network.nodes()) - adhering
 
         # Set labels for non-adhering nodes
         for node in non_adhering:
@@ -146,10 +142,9 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,
             nx.set_node_attributes(social_network, {node: {'Adheres?': 'No'}})
 
         # Set labels for adhering nodes
-        for node in contact_network.nodes():
-            if node not in non_adhering:
-                nx.set_node_attributes(contact_network, {node: {'Adheres?': 'Yes'}})
-                nx.set_node_attributes(social_network, {node: {'Adheres?': 'Yes'}})
+        for node in adhering:
+            nx.set_node_attributes(contact_network, {node: {'Adheres?': 'Yes'}})
+            nx.set_node_attributes(social_network, {node: {'Adheres?': 'Yes'}})
 
         # We are saving the initial state of G so we know what connections to restore later
         G_initial = deepcopy(contact_network)
@@ -201,7 +196,12 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,
         # Save informed count over time
         # Used when determining expected # of edges removed (extract_mfa.py)
         informed_and_infected = []
+
+        # Keep track of who is already quarantining (so we don't restore their edges prematurely)
         already_quarantining = []
+
+        # NOTE
+        avg_avg_just = []
 
         for t in range(T):
 
@@ -291,7 +291,7 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,
                 # Boolean value; Checks if "Informed" is an attribute of the node under consideration
                 is_informed = contact_network.nodes[u].get('Informed?') == 'Informed'
 
-                if state[u] == 1 and is_informed == True and (u not in already_quarantining):
+                if state[u] == 1 and is_informed == True:
                     should_quarantine.append(u)
 
 
@@ -323,6 +323,35 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,
                         
             informed_and_infected.append(should_quarantine)
 
+            # quick diagnostics: put inside t loop after quarantines/restorations
+            m_init = G_initial.number_of_edges()
+            m_now = contact_network.number_of_edges()
+            actual_removed_cum = m_init - m_now
+
+            # who is currently quarantining (status>0)
+            current_quarantining = [i for i, qv in enumerate(quarantine_statuses) if qv>0]
+            num_current_q = len(current_quarantining)
+
+            # nodes that *just* started quarantining this timestep
+            just_started = [u for u in range(n) if copy_state[u] != state[u] and state[u]==1 and contact_network.nodes[u].get('Informed?') == 'Informed' and contact_network.nodes[u].get('Adheres?') == 'Yes']
+
+            # avg degree in initial graph of those who just started
+            if len(just_started)>0:
+                avg_deg_just = np.mean([G_initial.degree(u) for u in just_started])
+            else:
+                avg_deg_just = None
+
+            avg_avg_just.append(avg_deg_just)
+
+            print(f"t={t} edges_init={m_init} edges_now={m_now} removed_cum={actual_removed_cum} #cur_q={num_current_q} #just_start={len(just_started)} avg_deg_just={avg_deg_just}")
+
+
+
+
+
+
+
+
             # Update infection count for plotting
             Inf.append(len([u for u in state.keys() if state[u] == 1]))
             PList.append(P)
@@ -341,6 +370,9 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,
         infection_data.append(x_data)
         infection_data.append(y_data_inf)
     
+    # See how far off avg. actually removed is from expected (k_0)
+    print("Average of avg. degrees of just-started quarantining nodes, over all time steps: ", np.mean([x for x in avg_avg_just if x is not None]))
+
     # Return the graph and the list of state change tuples, and all quarantine statuses (if applicable)
     if save_all == True:
         return contact_network, state_changes, infection_data, quarantine_prob_matrix, all_infections, social_network, mean_node_degrees, informed_and_infected

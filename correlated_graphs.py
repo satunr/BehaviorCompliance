@@ -90,8 +90,11 @@ def jaccard_similarity(set1, set2):
     union = len(set1 | set2)
     return intersection / union if union > 0 else 0
 
-def create_social_graph(H, nE=100):
-# Ego networks and Jaccard similarity
+def create_social_graph(H, nE):
+    if nE == None:
+        nE = H.number_of_edges() * 2  # Default to twice the number of edges in H
+
+    # Ego networks and Jaccard similarity
     K = 2
     N = sorted(H.nodes())
     Ego = {u: list(nx.ego_graph(H, u, radius=K).nodes()) for u in N}

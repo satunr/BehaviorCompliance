@@ -398,6 +398,63 @@ def compare_infections_adherence(adherence):
 
     return (x, mean_full, std_full), (x, mean_partial, std_partial)
 
+# SIRS w/ param q = "r" (edges removed until recovery) and adherence parameter
+def r_quarantine():
+    num_trials = 10
+
+    T_runs = []
+    Y_runs_r_quarantine = []
+    Y_runs_noquarantine = []
+
+    for _ in range(num_trials):
+        # With r-quarantine
+        data1 = SIR.Simulate_SIR(
+            contact_network=deepcopy(contact_network),
+            social_network=deepcopy(social_network),
+            T=T, Repeat=Repeat,
+            beta=beta, gamma=gamma, mu=mu, init=init,
+            average_data=False, q="r",
+            allow_restoration=True
+        )[2]
+        T_runs.append(data1[0])
+        Y_runs_r_quarantine.append(data1[1])
+
+        # Without quarantine
+        data2 = SIR.Simulate_SIR(
+            contact_network=deepcopy(contact_network),
+            social_network=deepcopy(social_network),
+            T=T, Repeat=Repeat,
+            beta=beta, gamma=gamma, mu=mu, init=init,
+            average_data=False, q=False,
+            allow_restoration=False
+        )[2]
+        Y_runs_noquarantine.append(data2[1])
+
+    x = T_runs[0]
+    y_rq = np.array(Y_runs_r_quarantine)
+    y_noq = np.array(Y_runs_noquarantine)
+
+    mean_rq = np.mean(y_rq, axis=0)
+    std_rq = np.std(y_rq, axis=0)
+
+    mean_noq = np.mean(y_noq, axis=0)
+    std_noq = np.std(y_noq, axis=0)
+
+    plt.plot(x, mean_rq, label='With r-quarantine', color='blue')
+    plt.fill_between(x, mean_rq - std_rq, mean_rq + std_rq, color='blue', alpha=0.3)
+
+    plt.plot(x, mean_noq, label='Without quarantine', color='red')
+    plt.fill_between(x, mean_noq - std_noq, mean_noq + std_noq, color='red', alpha=0.3)
+
+    plt.xlabel('Time')
+    plt.ylabel('# of Infected')
+    plt.title('SIR with r-Quarantine')
+    plt.legend()
+    plt.grid(True)
+    plt.show()
+
+    return (x, mean_rq, std_rq), (x, mean_noq, std_noq)
+
 # compare_infections_adherence(0.75)
 
 # plot_jaccard_similarity()
