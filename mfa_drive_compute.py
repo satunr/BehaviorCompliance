@@ -2,13 +2,13 @@
 import subprocess
 import sys
 
-repeat = 5
+repeat = 10
 run_simulation = True
 run_real_world = False
 
 if run_simulation == True:
     for _ in range(repeat):
-        subprocess.run([sys.executable, "mean_field_approx.py", "--subprocess"])
+        subprocess.run([sys.executable, "mean_field_approx.py", ])
     subprocess.run([sys.executable, "extract_mfa.py"])
 
 if run_real_world == True:

@@ -115,9 +115,6 @@ def restore_edges(g_init, g, node, already_quarantining):
 # seeds: a list of seed nodes
 def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,
                  q=False,allow_restoration=False,save_all=False,lt_threshold=None,adherence=None,begin_q=0,seeds=None):
-    if social_network is not None:
-        assert contact_network.nodes() == social_network.nodes(), "Contact and social networks must have the same node set."
-
     if begin_q is None:
         begin_q = 0
 

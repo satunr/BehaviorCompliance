@@ -106,7 +106,6 @@ def create_social_graph(H, nE):
     # Rank similarities (high sim → low rank → high probability)
     sorted_pairs = sorted(sim.items(), key=lambda x: x[1], reverse=True)
     ranks = {pair: rank + 1 for rank, (pair, _) in enumerate(sorted_pairs)}
-    max_rank = max(ranks.values())
 
     # Build edge list and sampling probabilities
     A = list(ranks.keys())

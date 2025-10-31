@@ -1,6 +1,7 @@
 import SIR
 import networkx as nx
 import correlated_graphs
+import find_seeds
 from copy import deepcopy
 import numpy as np
 from scipy.optimize import minimize
@@ -28,13 +29,13 @@ verbose = False  # Set verbose to True if you want to see detailed output during
 # Simulation parameters
 T = 100
 Repeat = 1
-beta = 0.11
-gamma = 0.10
-mu = 0.10
+beta = 0.11  # Infection rate
+gamma = 0.07  # Recovery rate
+mu = 0.10  # Immunity loss rate
 init = 0.10 # Initial infected portion
 q = "r"
-adherence = 0.6  # Adherence = None -> Full adherence, otherwise it is a float between 0 and 1
-split_point = 25  # Set to None if you want to optimize over the full SIR simulation, or a specific time point to split the optimization
+adherence = 0.7  # Adherence = None -> Full adherence, otherwise it is a float between 0 and 1
+split_point = 5  # Set to None if you want to optimize over the full SIR simulation, or a specific time point to split the optimization
 seeds = None  # Set to None for random seeds, or a list of node IDs to use as seeds. Ex. [0, 1, 2] for nodes 0, 1, and 2 as seeds
 density_social = None  # Set to None for default density, or an integer number of edges in the social graph
 
@@ -46,6 +47,11 @@ def truncate_files():
         if os.path.exists(file):
             with open(file, 'w') as f:
                 f.truncate(0)
+
+    # Clear data from mfa_seeds.npy if it exists
+    if os.path.exists("experiment_data/mfa_seeds.npy"):
+        os.remove("experiment_data/mfa_seeds.npy")
+
 if clear:
     truncate_files()
 
@@ -60,12 +66,24 @@ try:
     contact_graph = nx.relabel_nodes(contact_graph, lambda x: int(x))
     social_graph = nx.relabel_nodes(social_graph, lambda x: int(x))
 
+    # Find seed set so we have less variability in the simulation
+    seeds = find_seeds.find_seed_set(contact_graph, 10, 2) if seeds is None else seeds
+
+    # Write seeds to mfa_seeds.npy
+    np.save("experiment_data/mfa_seeds.npy", np.array(seeds))
+
 except (FileNotFoundError, OSError, ValueError, nx.NetworkXError) as e:
     print("No valid graphs found in mfa_*.gml. Generating new graphs.")
 
     contact_graph = nx.erdos_renyi_graph(n, p, seed=42)
     social_graph = correlated_graphs.create_social_graph(contact_graph, nE=density_social)[0]
     # social_graph = nx.erdos_renyi_graph(n, p, seed=24, directed=True)
+
+    # Read seed set from mfa_seeds.npy if it exists
+    try:
+        seeds = np.load("experiment_data/mfa_seeds.npy").tolist() if seeds is None else seeds
+    except (FileNotFoundError, OSError, ValueError) as e:
+        seeds = None
 
     nx.write_gml(contact_graph, "experiment_data/mfa_contact.gml")
     nx.write_gml(social_graph, "experiment_data/mfa_social.gml")
