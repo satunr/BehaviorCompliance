@@ -34,8 +34,8 @@ gamma = 0.07  # Recovery rate
 mu = 0.10  # Immunity loss rate
 init = 0.10 # Initial infected portion
 q = "r"
-adherence = 0.7  # Adherence = None -> Full adherence, otherwise it is a float between 0 and 1
-split_point = 5  # Set to None if you want to optimize over the full SIR simulation, or a specific time point to split the optimization
+adherence = 0.6  # Adherence = None -> Full adherence, otherwise it is a float between 0 and 1
+split_point = 30  # Set to None if you want to optimize over the full SIR simulation, or a specific time point to split the optimization
 seeds = None  # Set to None for random seeds, or a list of node IDs to use as seeds. Ex. [0, 1, 2] for nodes 0, 1, and 2 as seeds
 density_social = None  # Set to None for default density, or an integer number of edges in the social graph
 
@@ -289,6 +289,8 @@ def drive_optimizer(split_point=None):
 # This is for single runs under a given SIR configuration
 # Split: Tuple (split_point, half), where split_point is the time to split the optimization, and half is either 1 or 2
 def save_xy_data(dynamic_deg=None, w1_avg=None, w2_avg=None, w1_all_runs=None, split=None):
+    given_n_i = [given_at_time(t)[2] for t in range(len(true_dynamics))]
+
     # Compute y values
     w1_true_y = [true_w[t][0] for t in range(T)]
     w1_est_y = w1_avg
@@ -318,6 +320,7 @@ def save_xy_data(dynamic_deg=None, w1_avg=None, w2_avg=None, w1_all_runs=None, s
             w2_true_y = w2_true_y[:sp]
             w2_est_y = w2_est_y[:sp]
             i_and_inf = i_and_inf[:sp]
+            given_n_i = given_n_i[:sp]
         if half == 2:
             x_ofs = sp  # Offset for generating x values for plotting
             sir_infections_y = sir_infections_y[sp:]
@@ -327,6 +330,7 @@ def save_xy_data(dynamic_deg=None, w1_avg=None, w2_avg=None, w1_all_runs=None, s
             w2_true_y = w2_true_y[sp:]
             w2_est_y = w2_est_y[sp:]
             i_and_inf = i_and_inf[sp:]
+            given_n_i = given_n_i[sp:]
 
     with open("experiment_data/mfa_xy_data.txt", "a") as f:
         f.write("==New Sample==\n")
@@ -367,6 +371,10 @@ def save_xy_data(dynamic_deg=None, w1_avg=None, w2_avg=None, w1_all_runs=None, s
         # Keep x values aligned with sir_infections_y; recall we only run the optimizer up to T where i sufficiently large
         f.write(f"x: {','.join(map(str, range(x_ofs, len(i_and_inf) + x_ofs)))}\n")
         f.write(f"y: {','.join(map(str, i_and_inf[:len(i_and_inf)]))}\n\n")
+
+        f.write("Given Newly Infected Ratio Over Time:\n")
+        f.write(f"x: {','.join(map(str, range(x_ofs, len(given_n_i) + x_ofs)))}\n")
+        f.write(f"y: {','.join(map(str, given_n_i))}\n\n")
 
 if split_point is None:
     w1_run_avg, w2_run_avg, w1_all_runs = drive_optimizer(split_point=None)

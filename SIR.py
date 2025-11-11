@@ -274,11 +274,6 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,
 
 
 
-            #------------
-            #
-            #  Temporary. Get rid of this as soon as possible
-            #
-            #------------
 
             # List of nodes that would quarantine under ideal conditions
             should_quarantine = []
