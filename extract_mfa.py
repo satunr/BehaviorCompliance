@@ -6,6 +6,16 @@ import ast
 import os
 import re
 import scipy.optimize as opt
+from scipy.optimize import minimize
+from sympy import symbols, Function, diff, sin, exp, pprint, Matrix
+from scipy.special import logit, expit
+from numdifftools import Hessian
+import random
+
+# Experimental
+# import networkx as nx
+# import IM
+# import random
 
 #-----------
 #
@@ -20,8 +30,9 @@ show_adherence = False
 plot_split_opt = False  #  Plot average results for 1 configuration, but with splitting the optimization
 plot_many_non_split = False  # Plot many <k> estimates without splitting
 show_independence_k = False  # Show that <k> is independent of SIRS parameters when adherence = 0
-analyze_quarantine_dynamics = True # Compare ideal vs actual quarantine dynamics from I(t), R(t), <k> estimated
-new_function = False  # Experiment from 9/26/25 meeting. Add code at bottom of this file
+plot_inf_vs_infm = True  # Plot informed, infected, informed and infected
+analyze_quarantine_dynamics = True # Compute adherence from quarantine dynamics
+
 
 #----------
 #
@@ -30,14 +41,7 @@ new_function = False  # Experiment from 9/26/25 meeting. Add code at bottom of t
 #----------
 
 def parse_sample_data(filename):
-    """
-    Parse the MFA data file into a list of samples.
-    Handles:
-      - Numeric datasets (floats)
-      - 'w1 all runs' as a list of lists of floats
-      - 'Informed Over Time' as a list of lists or nested data
-      - 'Number of nodes' as an integer
-    """
+    # Parse the MFA data file into a list of samples.
     samples = []
     current_sample = {}
     current_dataset = None
@@ -88,9 +92,9 @@ def parse_sample_data(filename):
                 continue
 
             # Detect dataset name lines
-            if line.startswith(("SIR Infections", "Dynamic degree over time", "w1 True", "w1 Estimated",
+            if line.startswith(("SIR Infections", "Dynamic degree", "w1 True", "w1 Estimated",
                                 "w1 all runs", "w2 True", "w2 Estimated",
-                                "Informed and Infected Over Time", "Given Newly Infected Ratio Over Time")):
+                                "Informed and Infected", "Given Newly Infected Ratio", "Informed")):
                 if current_dataset and x_data:
                     current_sample[current_dataset] = {'x': x_data, 'y': y_data}
                     x_data, y_data = [], []
@@ -109,12 +113,12 @@ def parse_sample_data(filename):
             elif line.startswith("y:"):
                 if current_dataset == 'w1 all runs':
                     y_data = parse_w1_all_runs_y_line(line)
-                elif current_dataset == 'Informed Over Time':
+                elif current_dataset == 'Informed':
                     # Evaluate as Python object (list of lists)
                     try:
                         y_data = ast.literal_eval(line[2:].strip())
                     except Exception as e:
-                        print(f"Error parsing Informed Over Time: {e}")
+                        print(f"Error parsing Informed: {e}")
                         y_data = []
                 else:
                     raw = line[2:].strip()
@@ -244,7 +248,7 @@ def plot_halves(samples):
         plt.figure(figsize=(10, 6))
         for i, sample in enumerate(first_half, 1):
             color = next(colors)
-            plt.plot(sample['SIR Infections (Inset)']['x'], sample['SIR Infections (Inset)']['y'],
+            plt.plot(sample['SIR Infections']['x'], sample['SIR Infections']['y'],
                      label=f'Sample {i}', color=color)
         plt.xlabel('Time')
         plt.ylabel('SIR Infections')
@@ -279,7 +283,7 @@ def plot_halves(samples):
         plt.figure(figsize=(10, 6))
         for i, sample in enumerate(second_half, mid_point + 1):
             color = next(colors)
-            plt.plot(sample['SIR Infections (Inset)']['x'], sample['SIR Infections (Inset)']['y'],
+            plt.plot(sample['SIR Infections']['x'], sample['SIR Infections']['y'],
                      label=f'Sample {i}', color=color)
         plt.xlabel('Time')
         plt.ylabel('SIR Infections')
@@ -345,9 +349,9 @@ def plot_unintertwined(samples):
         plt.figure(figsize=(10, 6))
         for i, sample in enumerate(group, 1):
             color = next(colors)
-            if 'SIR Infections (Inset)' in sample:
-                x = sample['SIR Infections (Inset)']['x']
-                y = sample['SIR Infections (Inset)']['y']
+            if 'SIR Infections' in sample:
+                x = sample['SIR Infections']['x']
+                y = sample['SIR Infections']['y']
                 plt.plot(x, y, label=f'{title} Sample {i}', color=color)
             else:
                 # try fallback key name if present
@@ -478,6 +482,60 @@ if show_adherence == True:
             adherence = np.mean(np.abs(w1_estimated - w1_true) / w1_true)
             print(f"Sample {i}: Adherence = {adherence}")
 
+if plot_inf_vs_infm == True:
+    # We only want odd indexed samples (post-quarantine)
+    all_samples = parse_sample_data("experiment_data/mfa_xy_data.txt")
+    odd_samples = [all_samples[i] for i in range(len(all_samples)) if i % 2 == 1]
+
+    population = odd_samples[0]['Number of nodes']
+    # Rename for simplicity
+    n = population
+
+    avg_inf = []
+    for i, sample in enumerate(odd_samples):
+        if 'SIR Infections' in sample:
+            infected_over_time = sample['SIR Infections']['y']
+            avg_inf.append(infected_over_time)
+    inf = np.mean(avg_inf, axis=0)
+
+    avg_i_and_inf = []
+    for i, sample in enumerate(odd_samples):
+        if 'Informed and Infected' in sample:
+            informed_and_infected = sample['Informed and Infected']['y']
+            avg_i_and_inf.append(informed_and_infected)
+    i_and_inf = np.mean(avg_i_and_inf, axis=0)
+
+    avg_infm = []
+    for i, sample in enumerate(odd_samples):
+        if 'Informed' in sample:
+            informed_and_infected = sample['Informed']['y']
+            avg_infm.append(informed_and_infected)
+    infm = np.mean(avg_infm, axis=0)
+
+    plt.figure(figsize=(10, 6))
+
+    plt.plot(range(len(infm)), infm / n,
+            label="Informed",
+            color='#1f77b4',
+            alpha=1.0)
+
+    plt.plot(range(len(inf)), inf / n,
+            label="Infected",
+            color='#ff7f0e',
+            alpha=0.75)
+
+    plt.plot(range(len(i_and_inf)), i_and_inf / n,
+            label="Informed and Infected",
+            color='#2ca02c',
+            alpha=0.5)
+
+    plt.xlabel('Time')
+    plt.ylabel("Informed and Infected vs Infected")
+    plt.title("Informed and Infected vs Infected Over Time")
+    plt.grid(True)
+    plt.legend()
+    plt.show()
+
 
 #-------------
 #
@@ -509,242 +567,160 @@ def split_triples_from_file(filename="experiment_data/infected_recovered.txt"):
     
     return split_point, total_nodes, before, after
 
-# To run this, the configuration must have a split point
-# if analyze_quarantine_dynamics == True:
-samples = parse_sample_data("experiment_data/mfa_xy_data.txt")
+if analyze_quarantine_dynamics == True:
+    # To run this, the configuration must have a split point
+    # if analyze_quarantine_dynamics == True:
+    samples = parse_sample_data("experiment_data/mfa_xy_data.txt")
 
-# k_0 = samples[0]['w1 Estimated']['y'][-1]
-k_0 = samples[0]['w1 True (Mean Node Degree)']['y'][-1]
-# m.n.d. after quarantining is observed
-# k_q = samples[1]['w1 Estimated']['y'][-1]
-k_q = samples[1]['w1 True (Mean Node Degree)']['y'][-1]
-adhering_proportion = samples[1]['Adhering proportion']
+    # k_0 = samples[0]['w1 Estimated']['y'][-1]
+    k_0 = samples[0]['w1 True (Mean Node Degree)']['y'][-1]
+    # m.n.d. after quarantining is observed
+    # k_q = samples[1]['w1 Estimated']['y'][-1]
+    k_q = samples[1]['w1 True (Mean Node Degree)']['y'][-1]
+    split_point = int(samples[1]['w1 True (Mean Node Degree)']['x'][0])  # First time point of second sample
+    adhering_proportion = samples[1]['Adhering proportion']
 
-# Informed over time for first sample (no quarantine) will be 0. This variable is for after quarantining begins
-population = samples[0]['Number of nodes']
+    population = samples[0]['Number of nodes']
 
-print("k_0:", k_0)
-print("k_q:", k_q)
+    print("k_0:", k_0)
+    print("k_q:", k_q)
 
-# Calculate expected degree over time
-def k_effective_calc(informed_and_infected, current_time, adherence=1.0):
-    assert current_time < len(informed_and_infected) + 1, "Current time exceeds data length"
+    collection_k_eff_runs = []
+    num_simulations = len(samples)
+    assert num_simulations % 2 == 0, f"Number of samples should be even for split optimizations. Number: {len(samples)}"
+    num_simulations = num_simulations / 2    # Only consider post-quarantining splits
+    num_simulations = int(num_simulations)
 
-    # Observation:
-    # High adherence -> True removal ~ k_0 * (1 - adherence * i')
-    # Low adherence -> True removal ~ k_0 * (1 - 2 * adherence * i')
-    k_effective = [k_0 * (1 - (2 * adherence * (informed_and_infected[time] / population))) for time in range(current_time)]
+    # List of informed and infected for each run
+    inf_inf_lst = []
 
-    # Expected <k> at each time point under full adherence
-    expected_k = (1 / len(k_effective)) * sum(k_effective)
+    for i in range(num_simulations):
+        index = i * 2 + 1   # Only consider post-quarantining splits (odd indexed samples)
 
-    print("Expected <k> under full adherence: ", expected_k)
+        # List of informed and infected over time for this sample
+        informed_and_infected = samples[index]['Informed and Infected']['y']
+        proportions = [x / population for x in informed_and_infected]
+        inf_inf_lst.append(proportions)
 
-    return expected_k
+    i_prime = np.mean(inf_inf_lst, axis=0)  # Average over all runs after quarantine
 
-#-------------
-#
-#  Show that <k_effective> (our estimate) converges to true <k_q> (from simulation) when adherence = 1
-#
-#-------------
+    # Calculate expected degree over time
+    def k_expected(informed_and_infected, current_time, adherence=1.0):
+        assert current_time < len(informed_and_infected) + 1, "Current time exceeds data length"
 
-collection_k_eff_runs = []
-num_simulations = len(samples)
-assert num_simulations % 2 == 0, f"Number of samples should be even for split optimizations. Number: {len(samples)}"
-num_simulations = num_simulations / 2    # Only consider post-quarantining splits
-num_simulations = int(num_simulations)
+        # Observation:
+        # High adherence -> True removal ~ k_0 * (1 - adherence * i')
+        # Low adherence -> True removal ~ k_0 * (1 - 2 * adherence * i')
+        k_expected_t = [k_0 * (1 - (2 * adherence * (informed_and_infected[time] / population))) for time in range(current_time)]
 
-#-------------
-#
-#  Calculate adherence using the approximation: <k_q> = <k_0> * (1 - correction_term * adherence * i')
-#    where i' is the informed and infected proportion
-#
-#-------------
+        # Expected <k> at each time point under full adherence
+        expected_k = (1 / len(k_expected_t)) * sum(k_expected_t)
 
-# List of informed and infected for each run
-inf_inf_lst = []
+        return expected_k
+    
+    # Calculate expected degree under full quarantine
+    def k_effective(infected):
+        # Effective degree based on infected proportion
+        k_eff_t = [k_0 * (1 - 2 * (infected[time] / population)) for time in range(len(infected))]
 
-for i in range(num_simulations):
-    index = i * 2 + 1   # Only consider post-quarantining splits (odd indexed samples)
+        k_eff = np.mean(k_eff_t)
 
-    # List of informed and infected over time for this sample
-    informed_and_infected = samples[index]['Informed and Infected Over Time']['y']
-    proportions = [x / population for x in informed_and_infected]
-    inf_inf_lst.append(proportions)
+        return k_eff
 
-i_prime = np.mean(inf_inf_lst, axis=0)  # Average over all runs after quarantine
+    #--------------
+    #
+    #  Naive estimate of adherence
+    #  Show that only knowing <k_0>, <k_q>, k_eff is still insufficient in determining adherence
+    #
+    #-------------
 
-#-------------
-#
-#  Plot i'(t) with i(t) to see how they compare
-#
-#-------------
+    k_eff = k_effective(inf)
+    adherence_naive = 1 - (k_eff - k_q) / (k_eff) if k_eff != 0 else 0
 
-avg_inf = []
-for i in range(num_simulations):
-    index = i * 2 + 1   # Only consider post-quarantining splits (odd indexed samples)
-    infected_over_time = samples[index]['SIR Infections (Inset)']['y']
-    infected_over_time = [x / population for x in infected_over_time]
+    print("Naive approximation for adherence:", adherence_naive)
 
-    avg_inf.append(infected_over_time)
-inf = np.mean(avg_inf, axis=0)
+    k_q_lst_avg = []
+    for i in range(num_simulations):
+        index = i * 2 + 1   # Only consider post-quarantining splits (odd indexed samples)
 
-plt.figure(figsize=(10, 6))
-plt.plot(range(len(i_prime)), i_prime, label="Informed and Infected Proportion (i')", color='#1f77b4')
-plt.plot(range(len(inf)), inf, label="Infected Proportion", color='#ff7f0e')
-plt.xlabel('Time')
-plt.ylabel("i' vs i")
-plt.title("Informed and Infected Proportion Over Time")
-plt.grid(True)
-plt.legend()
-# plt.show()
+        # List of <k_q> over time for this sample
+        k_q_lst = samples[index]['Dynamic degree']['y']
+        k_q_lst_avg.append(k_q_lst)
 
-#-------------
-#
-#  Find adherence by minimizing MSE between k_q vector and estimate k_q vector from formula
-#      Refer to proof in notes
-#  Notice: Requires assumption of true distribution of <k_q> over time
-#
-#-------------
+    k_q_true = np.mean(k_q_lst_avg, axis=0)  # Average over all runs AFTER quarantine
 
-k_q_lst_avg = []
-for i in range(num_simulations):
-    index = i * 2 + 1   # Only consider post-quarantining splits (odd indexed samples)
+    #-------------
+    #
+    #  Approximation: <k_q> ~ k_0 * (1 - S * adherence * i'), where S is a scale factor to optimize
+    #  Jointly optimize S and adherence
+    #
+    #-------------
 
-    # List of <k_q> over time for this sample
-    k_q_lst = samples[index]['Dynamic degree over time']['y']
-    k_q_lst_avg.append(k_q_lst)
-
-k_q_true = np.mean(k_q_lst_avg, axis=0)  # Average over all runs after quarantine
-
-sum_i_prime = sum(i_prime)
-sum_i_prime_sq = sum([x**2 for x in i_prime])
-sum_i_prime_k_q_true = sum([i_prime[t] * k_q_true[t] for t in range(len(i_prime))])
-
-adherence_mse = (k_0 * sum_i_prime - sum_i_prime_k_q_true) / (2 * k_0 * sum_i_prime_sq) if sum_i_prime_sq != 0 else 0
-# print("Estimated adherence (analytical): ", adherence_mse)
-
-#-------------
-#
-#  Minimize MSE numerically
-#
-#-------------
-
-def loss_adherence(adherence):
-    k_q_estimate = [k_0 * (1 - 2 * adherence * i_prime[t]) for t in range(len(i_prime))]
-    mse = np.mean([(k_q_true[t] - k_q_estimate[t]) ** 2 for t in range(len(i_prime))])
-    return mse
-
-initial_guess = [0.5]  # Initial guess for adherence
-bounds = [(0, 1)]  # Adherence must be between 0 and 1
-result = opt.minimize(loss_adherence, initial_guess, bounds=bounds)
-adherence_mse = result.x[0]
-print("Estimated adherence (from MSE minimization): ", adherence_mse)
-
-#-------------
-#
-#  Brute-force search for both CORRECTION_FACTOR and adherence_val
-#  Can show us how the correction factor should scale with adherence
-#
-#-------------
-
-def brute_force_adherence_correction():
     # Define loss (MSE) for given parameters
-    def mse_loss(params):
-        CORRECTION_FACTOR, adherence_val = params
-        k_q_est = k_0 * (1 - CORRECTION_FACTOR * adherence_val * i_prime)
+    def mse_loss(params, i_prime):
+        S, adherence_val = params
+        # i_prime: a vector of informed and infected proportions over time after quarantine
+        k_q_est = sum(k_0 * (1 - S * adherence_val * i_prime[t]) for t in range(len(i_prime)))
         mse = np.mean((k_q_true - k_q_est) ** 2)
 
         return mse
 
     # Define parameter ranges
-    CORRECTION_RANGE = (1.0, 2.0, 0.025)   # [1.0, 1.1, ..., 2.0]
-    ADHERENCE_RANGE = (0.1, 1.0, 0.025)    # [0.1, 0.2, ..., 1.0]
+    S_RANGE = (1.0, 2.0)
+    ADHERENCE_RANGE = (0.1, 1.0)
 
-    # Perform brute-force search
-    res = opt.brute(
-        mse_loss, 
-        ranges=(CORRECTION_RANGE, ADHERENCE_RANGE),
-        full_output=True,
-        finish=None
-    )
+    # Keep track of best parameters across runs
+    best_S_lst = []
+    best_adh_lst = []
 
-    best_params, best_mse = res[0], res[1]
-    print(f"Best CORRECTION_FACTOR: {best_params[0]:.2f}")
-    print(f"Best adherence_val: {best_params[1]:.2f}")
-    print(f"Lowest MSE: {best_mse:.6f}")
+    for i in range(num_simulations):
+        res = minimize(lambda params: mse_loss(params, inf_inf_lst[i]),
+            # Initial guess
+            x0=[1.5, 0.5],
+            bounds=[S_RANGE, ADHERENCE_RANGE],
+            method='L-BFGS-B',
+            options={'gtol': 1e-6}
+        )
 
-    # Generate best-fit curve
-    best_CORR, best_adherence = best_params
-    k_q_est_best = [k_0 * (1 - best_CORR * best_adherence * i_prime[t]) for t in range(len(i_prime))]
+        best_params = res.x
+        best_S, best_adherence = best_params
 
-    # Plot estimated vs true k_q using adherence_mse
-    plt.close('all')
+        best_S_lst.append(best_S)
+        best_adh_lst.append(best_adherence)
+
+    # Average best parameters
+    best_S = np.mean(best_S_lst)
+    best_adherence = np.mean(best_adh_lst)
+
+    print("Best S (avg over runs):", best_S)
+    print("Best Adherence (avg over runs):", best_adherence)
+
+    # Standard deviations
+    S_std = np.std(best_S_lst)
+    adherence_std = np.std(best_adh_lst)
+
+    # Calculate estimated k_q using average best parameters
+    k_q_est_best = [k_0 * (1 - best_S * best_adherence * i_prime[t]) for t in range(len(i_prime))]
+
+    # Obtain std for estimated k_q
+    k_q_est_runs = []
+    for i in range(num_simulations):
+        k_q_est_run = [k_0 * (1 - best_S_lst[i] * best_adh_lst[i] * inf_inf_lst[i][t]) for t in range(len(i_prime))]
+        k_q_est_runs.append(k_q_est_run)
+
+    k_q_est_runs = np.array(k_q_est_runs)
+    k_q_est_mean = np.mean(k_q_est_runs, axis=0)
+    k_q_est_std = np.std(k_q_est_runs, axis=0)
+    
+    # Plot estimated vs true k_q with std bands
     plt.figure(figsize=(10, 6))
-    plt.plot(range(len(i_prime)), k_q_true, label='True $k_q$', alpha=0.7)
-    plt.plot(range(len(i_prime)), k_q_est_best, label='Estimated $k_q$ (Best Fit)', lw=2)
-    plt.xlabel('$i\'$ (input)')
-    plt.ylabel('$k_q$')
-    plt.title('Estimated vs True $k_q$ Using MSE Minimization')
+    plt.plot(range(len(k_q_true)), k_q_true, label='True <k_q>', color='#1f77b4')
+    plt.plot(range(len(k_q_est_best)), k_q_est_best, label='Estimated <k_q> (best params)', color='#ff7f0e', linestyle='--')
+    plt.fill_between(range(len(k_q_est_mean)), k_q_est_mean - k_q_est_std, k_q_est_mean + k_q_est_std,
+                        color='#ff7f0e', alpha=0.2, label='Estimate ± 1 std (all runs)')
+    plt.xlabel('Time')
+    plt.ylabel('<k_q> values')
+    plt.title('Estimated vs True <k_q> with Std Bands')
     plt.legend()
-    plt.grid(True, linestyle='--', alpha=0.5)
-    plt.tight_layout()
-    # plt.show()
-
-# -------------------------
-#
-#  Sigmoid fitting approach
-#
-#-------------------------
-
-def sigmoid(x, s=1, x0=0.5, a=1, b=0):
-    return a * (1 / (1 + np.exp(-s * (x - x0)))) + b
-
-# -------------------------
-#
-# Loss function (MSE) with multiple parameters
-# params = [s, x0, a, b]
-#
-# -------------------------
-def loss_function(params):
-    s, x0, a, b = params
-    k_q_estimate = [
-        k_0 * (1 - adhering_proportion * i_prime[t] * sigmoid(i_prime[t], s, x0, a, b))
-        for t in range(len(i_prime))
-    ]
-    mse = np.mean([(k_q_true[t] - k_q_estimate[t]) ** 2 for t in range(len(i_prime))])
-    return mse
-
-initial_guess = [5.0, 0.5, 1.0, 0.0]  # s, x0, a, b
-bounds = [(0, 1000), (0, 1), (0, 10), (-2, 2)]
-
-result = opt.minimize(loss_function, initial_guess, bounds=bounds)
-s_opt, x0_opt, a_opt, b_opt = result.x
-
-# MSE
-mse_opt = result.fun
-
-print(f"Optimal parameters:")
-print(f"  s (steepness) = {s_opt:.4f}")
-print(f"  x₀ (shift)     = {x0_opt:.4f}")
-print(f"  a (scale)      = {a_opt:.4f}")
-print(f"  b (offset)     = {b_opt:.4f}")
-print(f"Minimum MSE achieved: {mse_opt:.6f}")
-
-k_q_estimate_opt = [
-    k_0 * (1 - adhering_proportion * i_prime[t] * sigmoid(i_prime[t], s_opt, x0_opt, a_opt, b_opt))
-    for t in range(len(i_prime))
-]
-
-plt.figure(figsize=(8, 5))
-plt.plot(range(len(i_prime)), k_q_true, label='True $k_q$', alpha=0.7)
-plt.plot(range(len(i_prime)), k_q_estimate_opt, label=f'Fitted Sigmoid', lw=2)
-plt.xlabel('$i\'$ (input)')
-plt.ylabel('$k_q$')
-plt.title('Optimization of Sigmoid Parameters (s, x₀, a, b)')
-plt.legend()
-plt.grid(True, linestyle='--', alpha=0.5)
-plt.tight_layout()
-# plt.show()
-
-plt.close('all')
+    plt.grid(True)
+    plt.show()

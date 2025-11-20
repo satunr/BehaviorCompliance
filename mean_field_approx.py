@@ -7,6 +7,7 @@ import numpy as np
 from scipy.optimize import minimize
 import random
 import os
+import sys
 
 #----------
 #
@@ -26,15 +27,16 @@ p = 0.05  # probability of edge
 clear = False  # Set clear to True if you want to use a new network or clear data files. False if you want to keep the existing one.
 verbose = False  # Set verbose to True if you want to see detailed output during optimization
 
+adherence = 0.6
+
 # Simulation parameters
 T = 100
 Repeat = 1
-beta = 0.11  # Infection rate
+beta = 0.15  # Infection rate
 gamma = 0.07  # Recovery rate
 mu = 0.10  # Immunity loss rate
-init = 0.10 # Initial infected portion
-q = "r"
-adherence = 0.6  # Adherence = None -> Full adherence, otherwise it is a float between 0 and 1
+init = 0.15 # Initial infected portion
+q = "r"  # Quarantine type: indiviuals restore edges when recovered
 split_point = 30  # Set to None if you want to optimize over the full SIR simulation, or a specific time point to split the optimization
 seeds = None  # Set to None for random seeds, or a list of node IDs to use as seeds. Ex. [0, 1, 2] for nodes 0, 1, and 2 as seeds
 density_social = None  # Set to None for default density, or an integer number of edges in the social graph
@@ -102,6 +104,7 @@ deg_lst = SIR_results[6]
 dynamic_deg = deepcopy(deg_lst)     # Degree list over time. Will be used when calculating adherence(time) in extract_mfa.py
 true_dynamics = SIR_results[4]
 informed_and_infected = SIR_results[7]
+informed = SIR_results[8]
 
 def given_at_time(time):
     new_r_ratio = sum(1 for node in contact_graph.nodes() 
@@ -153,13 +156,6 @@ for t in range(start, T):
     if i < smallest_accurate_ratio:
         T = t + 1
         break
-
-# Save the full time-series data so we can average out daily infected/recovered results elsewhere
-full_dynamics = deepcopy(true_dynamics)
-
-# Shorten true_dynamics and deg_lst to match new T, where optimizer is well-behaved
-true_dynamics = true_dynamics[:T]
-deg_lst = deg_lst[:T]
 
 # If split_point > T, indexxing issues will arise
 assert split_point <= T, "Split point must be less than or equal to T"
@@ -302,6 +298,10 @@ def save_xy_data(dynamic_deg=None, w1_avg=None, w2_avg=None, w1_all_runs=None, s
     i_and_inf = deepcopy(informed_and_infected)
     i_and_inf = [len(i_and_inf[t]) for t in range(len(i_and_inf))]
 
+    # Bring informed into local scope
+    infm = deepcopy(informed)
+    infm = [len(informed[t]) for t in range(len(informed))]
+
     # Round to 2 decimal places where appropriate
     w1_est_y = [round(y, 2) for y in w1_est_y]
     w2_est_y = [round(y, 2) for y in w2_est_y]
@@ -321,6 +321,7 @@ def save_xy_data(dynamic_deg=None, w1_avg=None, w2_avg=None, w1_all_runs=None, s
             w2_est_y = w2_est_y[:sp]
             i_and_inf = i_and_inf[:sp]
             given_n_i = given_n_i[:sp]
+            infm = infm[:sp]
         if half == 2:
             x_ofs = sp  # Offset for generating x values for plotting
             sir_infections_y = sir_infections_y[sp:]
@@ -331,6 +332,7 @@ def save_xy_data(dynamic_deg=None, w1_avg=None, w2_avg=None, w1_all_runs=None, s
             w2_est_y = w2_est_y[sp:]
             i_and_inf = i_and_inf[sp:]
             given_n_i = given_n_i[sp:]
+            infm = infm[sp:]
 
     with open("experiment_data/mfa_xy_data.txt", "a") as f:
         f.write("==New Sample==\n")
@@ -338,11 +340,11 @@ def save_xy_data(dynamic_deg=None, w1_avg=None, w2_avg=None, w1_all_runs=None, s
         f.write("Number of nodes: " + str(n) + "\n\n")
         f.write("Adhering proportion: " + str(adherence) + "\n\n")
 
-        f.write("SIR Infections (Inset):\n")
+        f.write("SIR Infections:\n")
         f.write(f"x: {','.join(map(str, range(x_ofs, len(sir_infections_y) + x_ofs)))}\n")
         f.write(f"y: {','.join(map(str, sir_infections_y))}\n\n")
 
-        f.write("Dynamic degree over time:\n")
+        f.write("Dynamic degree:\n")
         f.write(f"x: {','.join(map(str, range(x_ofs, len(dynamic_deg) + x_ofs)))}\n")
         f.write(f"y: {','.join(map(str, dynamic_deg))}\n\n")
 
@@ -367,13 +369,18 @@ def save_xy_data(dynamic_deg=None, w1_avg=None, w2_avg=None, w1_all_runs=None, s
         f.write(f"x: {','.join(map(str, range(x_ofs, len(w2_est_y) + x_ofs)))}\n")
         f.write(f"y: {','.join(map(str, w2_est_y))}\n\n")
 
-        f.write("Informed and Infected Over Time:\n")
-        # Keep x values aligned with sir_infections_y; recall we only run the optimizer up to T where i sufficiently large
+        f.write("Informed and Infected:\n")
         f.write(f"x: {','.join(map(str, range(x_ofs, len(i_and_inf) + x_ofs)))}\n")
         f.write(f"y: {','.join(map(str, i_and_inf[:len(i_and_inf)]))}\n\n")
 
-        f.write("Given Newly Infected Ratio Over Time:\n")
-        f.write(f"x: {','.join(map(str, range(x_ofs, len(given_n_i) + x_ofs)))}\n")
+        f.write("Informed:\n")
+        f.write(f"x: {','.join(map(str, range(x_ofs, len(infm) + x_ofs)))}\n")
+        f.write(f"y: {','.join(map(str, infm))}\n\n")
+
+        # Note: n_i isn't defined for t=0
+        minimum_n_i_time = 0 if x_ofs != 0 else 1
+        f.write("Given Newly Infected Ratio:\n")
+        f.write(f"x: {','.join(map(str, range(x_ofs + minimum_n_i_time, len(given_n_i) + x_ofs)))}\n")
         f.write(f"y: {','.join(map(str, given_n_i))}\n\n")
 
 if split_point is None:
@@ -397,12 +404,12 @@ def save_daily_infected_recovered():
             newly_infected = sum(
                 1
                 for node in contact_graph.nodes()
-                if full_dynamics[day][node] == 1 and full_dynamics[day - 1][node] != 1
+                if true_dynamics[day][node] == 1 and true_dynamics[day - 1][node] != 1
             )
             newly_recovered = sum(
                 1
                 for node in contact_graph.nodes()
-                if full_dynamics[day][node] == 2 and full_dynamics[day - 1][node] != 2
+                if true_dynamics[day][node] == 2 and true_dynamics[day - 1][node] != 2
             )
             
             f.write(f"{day},{newly_infected},{newly_recovered}\n")

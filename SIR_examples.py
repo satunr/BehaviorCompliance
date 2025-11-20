@@ -245,6 +245,7 @@ def plot_jaccard_similarity(num_runs=20, bins=10):
 
     return df, bin_means 
 
+# num_comparisons is the number of random vs non-random seed sets to compare
 def random_vs_nonrandom_seeds(num_comparisons):
     repeat = 10
     infections_random = []
