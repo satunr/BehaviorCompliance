@@ -11,6 +11,7 @@ from sympy import symbols, Function, diff, sin, exp, pprint, Matrix
 from scipy.special import logit, expit
 from numdifftools import Hessian
 import random
+from collections import defaultdict
 
 # Experimental
 # import networkx as nx
@@ -29,9 +30,9 @@ plot_opt_real_world = False  # Plot optimization results for 1 sample, but with 
 show_adherence = False
 plot_split_opt = False  #  Plot average results for 1 configuration, but with splitting the optimization
 plot_many_non_split = False  # Plot many <k> estimates without splitting
-show_independence_k = False  # Show that <k> is independent of SIRS parameters when adherence = 0
-plot_inf_vs_infm = True  # Plot informed, infected, informed and infected
-analyze_quarantine_dynamics = True # Compute adherence from quarantine dynamics
+show_independence_k = True  # Show that <k> is independent of SIRS parameters when adherence = 0
+plot_inf_vs_infm = False  # Plot informed, infected, informed and infected for 5 groups of post-quarantine samples
+analyze_quarantine_dynamics = False # Compute adherence from quarantine dynamics
 
 
 #----------
@@ -417,60 +418,48 @@ if plot_split_opt == True:
     # Plot for each group
     plot_unintertwined(samples)
 
+# Plot w1_all_runs for specified half
 # even_or_odd = 0: only plot first half (k_0) estimates
 # even_or_odd = 1: only plot second half (k_q) estimates
 def plot_independence(samples, even_or_odd=0):
-    # Plots w1 Estimated (with standard deviation), and w1 True (Mean Node Degree)
-    # for all samples, filtered by even_or_odd parameter.
+    # Extract w1_all_runs for specified half
+    w1_runs = []
+    for i, sample in enumerate(samples):
+        if 'w1 all runs' in sample:
+            if even_or_odd == 0 and i % 2 == 0:
+                w1_runs.extend(sample['w1 all runs']['y'])
+            elif even_or_odd == 1 and i % 2 == 1:
+                w1_runs.extend(sample['w1 all runs']['y'])
+    
+    # Convert to numpy array for easier manipulation
+    w1_array = np.array(w1_runs)  # shape: (num_runs, time_points)
+    mean_w1 = np.mean(w1_array, axis=0)
+    std_w1 = np.std(w1_array, axis=0)
+    time_points = np.arange(w1_array.shape[1])
 
-    if not samples:
-        print("No samples to plot.")
-        return
-
-    # Filter samples based on even_or_odd
-    filtered_samples = [s for i, s in enumerate(samples) if i % 2 == even_or_odd]
-
-    if not filtered_samples:
-        print(f"No {'even' if even_or_odd == 0 else 'odd'} samples to plot.")
-        return
-
-    all_w1_runs = [sample['w1 all runs']['y'] for sample in filtered_samples if 'w1 all runs' in sample]
-
-    plt.figure(figsize=(12, 8))
-    colors = cycle(['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'])
-
-    for i, sample in enumerate(filtered_samples):
-        color = next(colors)
-
-        # Plot w1 True
-        if 'w1 True (Mean Node Degree)' in sample:
-            x_true = sample['w1 True (Mean Node Degree)']['x']
-            y_true = sample['w1 True (Mean Node Degree)']['y']
-            plt.plot(x_true, y_true, label=f'Sample {i*2 + even_or_odd + 1} w1 True', color=color, linestyle='-')
-
-        # Plot w1 Estimated and std band
-        if 'w1 Estimated' in sample:
-            x_est = sample['w1 Estimated']['x']
-            y_est = sample['w1 Estimated']['y']
-            plt.plot(x_est, y_est, label=f'Sample {i*2 + even_or_odd + 1} w1 Estimated', color=color, linestyle='--')
-
-            # Plot std band if available
-            if i < len(all_w1_runs):
-                runs = np.array(all_w1_runs[i])  # shape: (num_runs, len(time_points))
-                std_dev = np.std(runs, axis=0)
-                plt.fill_between(x_est, np.array(y_est) - std_dev, np.array(y_est) + std_dev,
-                                 color=color, alpha=0.3)
-
+    plt.figure(figsize=(10, 6))
+    plt.plot(time_points, mean_w1, label='Mean M.N.D. Estimate', color='#ff7f0e')
+    plt.fill_between(time_points, mean_w1 - std_w1, mean_w1 + std_w1,
+                        color='#ff7f0e', alpha=0.2, label='Estimate ± 1 std')
+    # Plot ground truth
+    if even_or_odd == 0:
+        plt.hlines(y=samples[0]['w1 True (Mean Node Degree)']['y'][-1],
+                   xmin=0, xmax=time_points[-1],
+                   colors='blue', linestyles='--', label='Ground Truth M.N.D.')
+    else:
+        plt.hlines(y=samples[1]['w1 True (Mean Node Degree)']['y'][-1],
+                   xmin=0, xmax=time_points[-1],
+                   colors='blue', linestyles='--', label='Ground Truth M.N.D.')
     plt.xlabel('Time')
-    plt.ylabel('Mean Node Degree')
-    plt.title(f'<k> results from optimizer ({ "even" if even_or_odd == 0 else "odd" } samples)')
-    plt.grid(True)
+    plt.ylabel('Mean Node Degree Estimate')
+    plt.title('M.N.D. Estimates Across Many Runs')
     plt.legend()
+    plt.grid(True)
     plt.show()
-
+    
 if show_independence_k == True:
     samples = parse_sample_data("experiment_data/mfa_xy_data.txt")
-    plot_independence(samples, even_or_odd=1)  # Plot first half (k_0)
+    plot_independence(samples, even_or_odd=0)
 
 if show_adherence == True:
     samples = parse_sample_data("experiment_data/mfa_xy_data.txt")
@@ -483,59 +472,80 @@ if show_adherence == True:
             print(f"Sample {i}: Adherence = {adherence}")
 
 if plot_inf_vs_infm == True:
-    # We only want odd indexed samples (post-quarantine)
-    all_samples = parse_sample_data("experiment_data/mfa_xy_data.txt")
-    odd_samples = [all_samples[i] for i in range(len(all_samples)) if i % 2 == 1]
+    samples = parse_sample_data("experiment_data/mfa_xy_data.txt")
+    odd_samples = [samples[i] for i in range(len(samples)) if i % 2 == 1]
 
-    population = odd_samples[0]['Number of nodes']
-    # Rename for simplicity
-    n = population
+    # Truncate to multiple of 5
+    num_full_groups = len(odd_samples) // 5
+    odd_samples = odd_samples[:num_full_groups * 5]
 
-    avg_inf = []
-    for i, sample in enumerate(odd_samples):
-        if 'SIR Infections' in sample:
-            infected_over_time = sample['SIR Infections']['y']
-            avg_inf.append(infected_over_time)
-    inf = np.mean(avg_inf, axis=0)
+    if len(odd_samples) == 0:
+        print("No post-quarantine samples found.")
+    else:
+        n = odd_samples[0]['Number of nodes']
 
-    avg_i_and_inf = []
-    for i, sample in enumerate(odd_samples):
-        if 'Informed and Infected' in sample:
-            informed_and_infected = sample['Informed and Infected']['y']
-            avg_i_and_inf.append(informed_and_infected)
-    i_and_inf = np.mean(avg_i_and_inf, axis=0)
+        # Group by adherence (0.2, 0.4, 0.6, 0.8, 1.0)
+        grouped = np.array(odd_samples).reshape(5, -1)
 
-    avg_infm = []
-    for i, sample in enumerate(odd_samples):
-        if 'Informed' in sample:
-            informed_and_infected = sample['Informed']['y']
-            avg_infm.append(informed_and_infected)
-    infm = np.mean(avg_infm, axis=0)
+        adherence_levels = [0.2, 0.4, 0.6, 0.8, 1.0]
+        colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
 
-    plt.figure(figsize=(10, 6))
+        # Line styles for the three curve types
+        styles = {
+            'Infected':            ('solid',  2.5),
+            'Informed & Infected': ('dashed', 2.2),
+            'Informed':            ('dotted', 2.5)
+        }
 
-    plt.plot(range(len(infm)), infm / n,
-            label="Informed",
-            color='#1f77b4',
-            alpha=1.0)
+        plt.figure(figsize=(14, 8))
 
-    plt.plot(range(len(inf)), inf / n,
-            label="Infected",
-            color='#ff7f0e',
-            alpha=0.75)
+        # We'll build the legend entries in exact order
+        legend_handles = []
+        legend_labels  = []
 
-    plt.plot(range(len(i_and_inf)), i_and_inf / n,
-            label="Informed and Infected",
-            color='#2ca02c',
-            alpha=0.5)
+        for idx, (a, color) in enumerate(zip(adherence_levels, colors)):
+            group = grouped[idx]
 
-    plt.xlabel('Time')
-    plt.ylabel("Informed and Infected vs Infected")
-    plt.title("Informed and Infected vs Infected Over Time")
-    plt.grid(True)
-    plt.legend()
-    plt.show()
+            # Collect data
+            inf_data = [s['SIR Infections']['y'] for s in group if 'SIR Infections' in s]
+            ii_data  = [s['Informed and Infected']['y'] for s in group if 'Informed and Infected' in s]
+            i_data   = [s['Informed']['y'] for s in group if 'Informed' in s]
 
+            t = np.arange(200)  # adjust if needed
+
+            # Plot and create legend entry for each curve type
+            for name, data_list, key in [
+                ('Infected',            inf_data, 'SIR Infections'),
+                ('Informed & Infected', ii_data,  'Informed and Infected'),
+                ('Informed',            i_data,   'Informed')
+            ]:
+                if data_list:
+                    mean_curve = np.mean(data_list, axis=0) / n
+                    linestyle, lw = styles[name]
+                    line = plt.plot(t[:len(mean_curve)], mean_curve,
+                                    color=color, linestyle=linestyle, linewidth=lw,
+                                    label=f'{name} (a = {a})')[0]
+
+                    # Add to legend (exactly once per curve+adherence)
+                    legend_handles.append(line)
+                    legend_labels.append(f'{name} (a = {a})')
+
+        plt.xlabel('Time Step', fontsize=13)
+        plt.ylabel('Fraction of Population', fontsize=13)
+        plt.title('Post-Quarantine Dynamics by Adherence Level', fontsize=15)
+        plt.grid(True, alpha=0.3)
+        plt.xlim(0, None)
+        plt.ylim(0, 1.02)
+
+        # Clean 15-item legend, 3 columns
+        plt.legend(handles=legend_handles, labels=legend_labels,
+                   ncol=3, fontsize=10.8,
+                   loc='lower center', bbox_to_anchor=(0.5, -0.20),
+                   frameon=True, fancybox=True, shadow=True)
+
+        plt.tight_layout()
+        plt.subplots_adjust(bottom=0.24)  # extra space for legend
+        plt.show()
 
 #-------------
 #
@@ -634,6 +644,16 @@ if analyze_quarantine_dynamics == True:
     #
     #-------------
 
+    # We only want odd indexed samples (post-quarantine)
+    odd_samples = [samples[i] for i in range(len(samples)) if i % 2 == 1]
+
+    avg_inf = []
+    for i, sample in enumerate(odd_samples):
+        if 'SIR Infections' in sample:
+            infected_over_time = sample['SIR Infections']['y']
+            avg_inf.append(infected_over_time)
+    inf = np.mean(avg_inf, axis=0) / population
+
     k_eff = k_effective(inf)
     adherence_naive = 1 - (k_eff - k_q) / (k_eff) if k_eff != 0 else 0
 
@@ -651,23 +671,23 @@ if analyze_quarantine_dynamics == True:
 
     #-------------
     #
-    #  Approximation: <k_q> ~ k_0 * (1 - S * adherence * i'), where S is a scale factor to optimize
+    #  Approximation: <k_q> ~ <k_0> * (1 - S * adherence * i'), where S is a scale factor to optimize
     #  Jointly optimize S and adherence
     #
     #-------------
 
     # Define loss (MSE) for given parameters
-    def mse_loss(params, i_prime):
+    def mse_loss(params, i_prime_cur):
         S, adherence_val = params
         # i_prime: a vector of informed and infected proportions over time after quarantine
-        k_q_est = sum(k_0 * (1 - S * adherence_val * i_prime[t]) for t in range(len(i_prime)))
+        k_q_est = [k_0 * (1 - S * adherence_val * i_prime_cur[t]) for t in range(len(i_prime))]
         mse = np.mean((k_q_true - k_q_est) ** 2)
 
         return mse
 
     # Define parameter ranges
     S_RANGE = (1.0, 2.0)
-    ADHERENCE_RANGE = (0.1, 1.0)
+    ADHERENCE_RANGE = (0.0, 1.0)
 
     # Keep track of best parameters across runs
     best_S_lst = []
@@ -712,15 +732,60 @@ if analyze_quarantine_dynamics == True:
     k_q_est_mean = np.mean(k_q_est_runs, axis=0)
     k_q_est_std = np.std(k_q_est_runs, axis=0)
     
-    # Plot estimated vs true k_q with std bands
+    #--------------
+    #
+    #  Plot <k_q>_opt vs <k_q>_true with std bands
+    #
+    #--------------
+
     plt.figure(figsize=(10, 6))
-    plt.plot(range(len(k_q_true)), k_q_true, label='True <k_q>', color='#1f77b4')
-    plt.plot(range(len(k_q_est_best)), k_q_est_best, label='Estimated <k_q> (best params)', color='#ff7f0e', linestyle='--')
+    plt.plot(range(len(k_q_true)), k_q_true, label='True <$k_q$>', color='#1f77b4')
+    plt.plot(range(len(k_q_est_best)), k_q_est_best, label='Estimated <$k_q$> (best params)', color='#ff7f0e', linestyle='--')
     plt.fill_between(range(len(k_q_est_mean)), k_q_est_mean - k_q_est_std, k_q_est_mean + k_q_est_std,
                         color='#ff7f0e', alpha=0.2, label='Estimate ± 1 std (all runs)')
-    plt.xlabel('Time')
-    plt.ylabel('<k_q> values')
-    plt.title('Estimated vs True <k_q> with Std Bands')
+    plt.xlabel('Time (in days)')
+    plt.ylabel('<$k_q$>')
+    plt.title('<$k_q$> Parameter Optimization vs Ground Truth')
     plt.legend()
     plt.grid(True)
+    # plt.show()
+
+    plt.figure(figsize=(6, 6))
+
+    #----------------------
+    #
+    #  Plot true vs estimated adherence as stacked bar chart
+    #
+    #----------------------
+
+    labels               = ['Adherence Proportion']
+    true_adherence       = [adhering_proportion]      
+    estimated_adherence  = [best_adherence]       
+    error                = [adherence_std]        
+
+    # Bottom bar = true value (full height)
+    bars1 = plt.bar(labels, true_adherence, 
+                    color='#2ca02c', label='True Adherence', 
+                    edgecolor='black', linewidth=1.2)
+
+    # Top bar = difference between estimate and true (stacked)
+    difference = np.array(estimated_adherence) - np.array(true_adherence)
+    bars2 = plt.bar(labels, difference, bottom=true_adherence,
+                    yerr=error, error_kw={'capsize': 10, 'capthick': 2, 'ecolor': 'black'},
+                    color='#d62728', label='Estimated Adherence', alpha=0.85,
+                    edgecolor='black', linewidth=1.2)
+
+    plt.text(0, estimated_adherence[0] + 0.02, f'{estimated_adherence[0]:.3f} ± {error[0]:.3f}',
+            ha='center', va='bottom', fontweight='bold', color='#d62728')
+
+    plt.ylabel('Adherence Proportion', fontsize=12)
+    plt.title('True vs Estimated Adherence Proportion', fontsize=14)
+    plt.ylim(0, 1.05)
+    plt.grid(axis='y', alpha=0.3)
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.08), ncol=2)
+
+    # Remove x-tick labels since there's only one category
+    plt.xticks([])
+
+    plt.tight_layout()
     plt.show()
