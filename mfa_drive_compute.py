@@ -1,10 +1,9 @@
 # Use this file to run the mean field approximation several times
 import subprocess
 import sys
-# import extract_mfa
 import matplotlib.pyplot as plt
 
-repeat = 1
+repeat = 5
 run_simulation = True
 run_real_world = False
 

@@ -25,9 +25,9 @@ n = 200  # number of nodes
 p = 0.05  # probability of edge
 
 clear = False  # Set clear to True if you want to use a new network or clear data files. False if you want to keep the existing one.
-verbose = False  # Set verbose to True if you want to see detailed output during optimization
+verbose = True  # Set verbose to True if you want to see detailed output during optimization
 
-adherence = 0.4
+adherence = 0.6
 
 # Simulation parameters
 T = 100
@@ -37,7 +37,7 @@ gamma = 0.07  # Recovery rate
 mu = 0.10  # Immunity loss rate
 init = 0.15 # Initial infected portion
 q = "r"  # Quarantine type: indiviuals restore edges when recovered
-split_point = None  # Set to None if you want to optimize over the full SIR simulation, or a specific time point to split the optimization
+split_point = 30  # Set to None if you want to optimize over the full SIR simulation, or a specific time point to split the optimization
 seeds = None  # Set to None for random seeds, or a list of node IDs to use as seeds. Ex. [0, 1, 2] for nodes 0, 1, and 2 as seeds
 density_social = None  # Set to None for default density, or an integer number of edges in the social graph
 
@@ -182,7 +182,7 @@ for time in range(T):
 # eps_w1: Controls exploration of w1
 # alpha: Controls how much w1 is influenced by the running average
 # eps_w2: Controls smoothness of w2
-def optimize_segment(start=1, end=T, bounds = [(1, binomial_bound), (0, 1)],eps_w1=binomial_bound, eps_w2=1.0, alpha=0.7, num_runs=20):
+def optimize_segment(start=1, end=T, bounds = [(1, binomial_bound), (0, 1)],eps_w1=binomial_bound, eps_w2=0.075, alpha=1.0, num_runs=25):
 
     #---------
     #
@@ -204,7 +204,7 @@ def optimize_segment(start=1, end=T, bounds = [(1, binomial_bound), (0, 1)],eps_
         for t in range(start, end): 
             T_gen = t
             init_guess = None
-            eps_w1 = temp * ((1 - t/T)**0.5)  # Polynomial root decay of eps_w1 over time
+            eps_w1 = temp * ((1 - t/T)**0.25)  # Polynomial root decay of eps_w1 over time
 
             if w1_run_avg == None or prev_w2 == None:
                 init_guess = [random.uniform(1, binomial_bound), true_w[T_gen][1]]
@@ -330,6 +330,8 @@ def save_xy_data(dynamic_deg=None, w1_avg=None, w2_avg=None, w1_all_runs=None, s
             infm = infm[:sp]
             # Save <k_0> runs
             w1_all_runs = [run[:sp] for run in w1_all_runs]
+            # Delete all empty runs
+            w1_all_runs = [run for run in w1_all_runs if len(run) > 0]
         if half == 2:
             x_ofs = sp  # Offset for generating x values for plotting
             sir_infections_y = sir_infections_y[sp:]
@@ -343,6 +345,8 @@ def save_xy_data(dynamic_deg=None, w1_avg=None, w2_avg=None, w1_all_runs=None, s
             infm = infm[sp:]
             # Save <k_q> runs
             w1_all_runs = [run[sp:] for run in w1_all_runs]
+            # Delete all empty runs
+            w1_all_runs = [run for run in w1_all_runs if len(run) > 0]
 
     with open("experiment_data/mfa_xy_data.txt", "a") as f:
         f.write("==New Sample==\n")

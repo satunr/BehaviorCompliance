@@ -24,15 +24,14 @@ from collections import defaultdict
 #
 #-----------
 
-# plot_opt = True -> Plot optimization results for 1 sample (no splitting the optimization) 
-plot_opt = False
-plot_opt_real_world = False  # Plot optimization results for 1 sample, but with real-world data (Ex. Covid csv file)
+plot_opt = False # Plot optimization results for 1 sample (no splitting the optimization) 
+plot_opt_real_world = False  # Plot optimization results with real-world data (Ex. Covid csv file)
 show_adherence = False
-plot_split_opt = False  #  Plot average results for 1 configuration, but with splitting the optimization
+plot_split_opt = False  # Plot <k_0> and <k_q> estimates for a single run with split optimization
 plot_many_non_split = False  # Plot many <k> estimates without splitting
-show_independence_k = True  # Show that <k> is independent of SIRS parameters when adherence = 0
+show_independence_k = False  # Plot <k_q> estimates
 plot_inf_vs_infm = False  # Plot informed, infected, informed and infected for 5 groups of post-quarantine samples
-analyze_quarantine_dynamics = False # Compute adherence from quarantine dynamics
+analyze_quarantine_dynamics = True # Compute adherence from quarantine dynamics
 
 
 #----------
@@ -421,16 +420,27 @@ if plot_split_opt == True:
 # Plot w1_all_runs for specified half
 # even_or_odd = 0: only plot first half (k_0) estimates
 # even_or_odd = 1: only plot second half (k_q) estimates
-def plot_independence(samples, even_or_odd=0):
+def plot_independence(samples, even_or_odd):
     # Extract w1_all_runs for specified half
-    w1_runs = []
+    w1_runs = None
     for i, sample in enumerate(samples):
         if 'w1 all runs' in sample:
             if even_or_odd == 0 and i % 2 == 0:
-                w1_runs.extend(sample['w1 all runs']['y'])
+                w1_runs = sample['w1 all runs']['y']
             elif even_or_odd == 1 and i % 2 == 1:
-                w1_runs.extend(sample['w1 all runs']['y'])
-    
+                w1_runs = sample['w1 all runs']['y']
+
+    print(w1_runs)
+
+    # Remove all empty runs
+    w1_runs = [run for run in w1_runs if len(run) > 0]
+
+    # Make run's same length by extending with last value
+    max_length = max(len(run) for run in w1_runs)
+    for run in w1_runs:
+        while len(run) < max_length:
+            run.append(run[-1])
+
     # Convert to numpy array for easier manipulation
     w1_array = np.array(w1_runs)  # shape: (num_runs, time_points)
     mean_w1 = np.mean(w1_array, axis=0)
@@ -459,7 +469,7 @@ def plot_independence(samples, even_or_odd=0):
     
 if show_independence_k == True:
     samples = parse_sample_data("experiment_data/mfa_xy_data.txt")
-    plot_independence(samples, even_or_odd=0)
+    plot_independence(samples, even_or_odd=1)
 
 if show_adherence == True:
     samples = parse_sample_data("experiment_data/mfa_xy_data.txt")
@@ -759,32 +769,38 @@ if analyze_quarantine_dynamics == True:
     #----------------------
 
     labels               = ['Adherence Proportion']
-    true_adherence       = [adhering_proportion]      
-    estimated_adherence  = [best_adherence]       
-    error                = [adherence_std]        
+    true_adherence       = [adhering_proportion]
+    estimated_adherence  = [best_adherence]
+    error_alpha_95       = [1.96 * adherence_std]
 
-    # Bottom bar = true value (full height)
-    bars1 = plt.bar(labels, true_adherence, 
-                    color='#2ca02c', label='True Adherence', 
+    # Bottom bar = ESTIMATED value (with error bar)
+    bars1 = plt.bar(labels, estimated_adherence,
+                    yerr=error_alpha_95,
+                    error_kw={'capsize': 10, 'capthick': 2, 'ecolor': 'black'},
+                    color='#2ca02c', label='Estimated Adherence',
                     edgecolor='black', linewidth=1.2)
 
-    # Top bar = difference between estimate and true (stacked)
-    difference = np.array(estimated_adherence) - np.array(true_adherence)
-    bars2 = plt.bar(labels, difference, bottom=true_adherence,
-                    yerr=error, error_kw={'capsize': 10, 'capthick': 2, 'ecolor': 'black'},
-                    color='#d62728', label='Estimated Adherence', alpha=0.85,
+    # Difference between TRUE and ESTIMATED
+    difference = np.array(true_adherence) - np.array(estimated_adherence)
+
+    # Top bar = difference (no error bar)
+    bars2 = plt.bar(labels, difference, bottom=estimated_adherence,
+                    color='#d62728', label='True Adherence',
+                    alpha=0.85,
                     edgecolor='black', linewidth=1.2)
 
-    plt.text(0, estimated_adherence[0] + 0.02, f'{estimated_adherence[0]:.3f} ± {error[0]:.3f}',
-            ha='center', va='bottom', fontweight='bold', color='#d62728')
+    # Annotate at the ESTIMATED value height (+ error bar top)
+    plt.text(0, estimated_adherence[0] + error_alpha_95[0] + 0.02,
+            f'{estimated_adherence[0]:.3f} ± {error_alpha_95[0]:.3f}',
+            ha='center', va='bottom',
+            fontweight='bold', color='#2ca02c')
 
     plt.ylabel('Adherence Proportion', fontsize=12)
     plt.title('True vs Estimated Adherence Proportion', fontsize=14)
     plt.ylim(0, 1.05)
     plt.grid(axis='y', alpha=0.3)
-    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.08), ncol=2)
 
-    # Remove x-tick labels since there's only one category
+    plt.legend(loc='upper center', bbox_to_anchor=(0.5, -0.08), ncol=2)
     plt.xticks([])
 
     plt.tight_layout()
