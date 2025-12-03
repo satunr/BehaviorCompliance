@@ -1,6 +1,5 @@
 import networkx as nx
 import SIR
-import parse
 import correlated_graphs
 import matplotlib.pyplot as plt
 from copy import deepcopy
@@ -10,7 +9,7 @@ import pandas as pd
 import random
 import find_seeds
 
-n = 100
+n = 200
 T = 100
 Repeat = 1
 
@@ -19,12 +18,14 @@ gamma = 0.07  # recovery rate
 mu = 0.10   # immunity loss
 init = 0.15
 
-contact_network = nx.erdos_renyi_graph(100, 0.05, seed=42)
+contact_network = nx.erdos_renyi_graph(n=n, p=0.05, seed=42)
+n_contact = contact_network.number_of_nodes()
 
 # social_network = nx.erdos_renyi_graph(100, 0.05, seed=42)  # Placeholder for social network, replace with actual creation logic
-social_network = correlated_graphs.create_social_graph(contact_network)[0]
+social_network = correlated_graphs.create_social_graph(contact_network, nE = 2 * n_contact)[0]
 social_network = social_network.to_directed()  # Ensure the social network is directed
 
+# Plot SIR curve with and without informed individuals quarantining
 def informed_vs_noninformed():
     T_runs = []
     Y_runs_informed = []
@@ -39,7 +40,7 @@ def informed_vs_noninformed():
             social_network=deepcopy(social_network),
             T=T, Repeat=Repeat,
             beta=beta, gamma=gamma, mu=mu, init=init,
-            average_data=False, q=True, allow_restoration=False
+            q=True, allow_restoration=False
         )[2]
         T_runs.append(data_inf[0])
         Y_runs_informed.append(data_inf[1])
@@ -50,7 +51,7 @@ def informed_vs_noninformed():
             social_network=deepcopy(social_network),
             T=T, Repeat=Repeat,
             beta=beta, gamma=gamma, mu=mu, init=init,
-            average_data=False, q=False, allow_restoration=False
+            q=False, allow_restoration=False
         )[2]
         Y_runs_noninformed.append(data_noninf[1])
 
@@ -86,13 +87,16 @@ def informed_vs_noninformed():
 
     return (x, mean_inf, std_inf), (x, mean_noninf, std_noninf)
 
+# Plot SIR curve with constant quarantine vs no quarantine
 def const_quarantines():
     quarantine_constant = 14
-    num_trials = 10
+    num_trials = 25
 
     T_runs = []
     Y_runs_quarantine = []
     Y_runs_noquarantine = []
+
+    adherence = 1.0
 
     for _ in range(num_trials):
         # With constant quarantine
@@ -101,8 +105,8 @@ def const_quarantines():
             social_network=deepcopy(social_network),
             T=T, Repeat=Repeat,
             beta=beta, gamma=gamma, mu=mu, init=init,
-            average_data=False, q=quarantine_constant,
-            allow_restoration=True
+             q=quarantine_constant,
+            allow_restoration=True, adherence=adherence
         )[2]
         T_runs.append(data1[0])
         Y_runs_quarantine.append(data1[1])
@@ -113,7 +117,7 @@ def const_quarantines():
             social_network=deepcopy(social_network),
             T=T, Repeat=Repeat,
             beta=beta, gamma=gamma, mu=mu, init=init,
-            average_data=False, q=False,
+             q=False,
             allow_restoration=False
         )[2]
         Y_runs_noquarantine.append(data2[1])
@@ -143,12 +147,15 @@ def const_quarantines():
 
     return (x, mean_q, std_q), (x, mean_noq, std_noq)
 
+# Plot SIR curve with normally-distributed quarantine vs no quarantine
 def normal_dist_quarantines():
-    num_trials = 10
+    num_trials = 25
 
     T_runs = []
     Y_runs_normal = []
     Y_runs_noquarantine = []
+
+    adherence = 1.0
 
     for _ in range(num_trials):
         # With normally-distributed quarantine
@@ -157,7 +164,7 @@ def normal_dist_quarantines():
             social_network=deepcopy(social_network),
             T=T, Repeat=Repeat,
             beta=beta, gamma=gamma, mu=mu, init=init,
-            average_data=False, q=True,
+             q=True, adherence=adherence,
             allow_restoration=True
         )[2]
         T_runs.append(data1[0])
@@ -169,7 +176,7 @@ def normal_dist_quarantines():
             social_network=deepcopy(social_network),
             T=T, Repeat=Repeat,
             beta=beta, gamma=gamma, mu=mu, init=init,
-            average_data=False, q=False,
+             q=False,
             allow_restoration=False
         )[2]
         Y_runs_noquarantine.append(data2[1])
@@ -206,44 +213,62 @@ def plot_jaccard_similarity(num_runs=20, bins=10):
     H = nx.convert_node_labels_to_integers(H, first_label=0)
     contact_graph = H.to_undirected()
 
-    # Store bin_means for each run
     all_bin_means = []
 
     for run in range(num_runs):
-        social_graph, sim = correlated_graphs.create_social_graph(contact_graph)
+        social_graph, sim = correlated_graphs.create_social_graph(
+            contact_graph,
+            nE=2 * contact_graph.number_of_edges()
+        )
         I = social_graph.to_undirected()
+
         data = [(sim[pair], int(I.has_edge(*pair))) for pair in sim]
         df = pd.DataFrame(data, columns=['similarity', 'edge'])
 
-        # Bin similarities and average edge existence
         df['bin'] = pd.cut(df['similarity'], bins=bins)
         bin_means = df.groupby('bin')['edge'].mean()
         all_bin_means.append(bin_means.values)
 
-    # Convert to array shape: (num_runs, num_bins)
     all_bin_means = np.array(all_bin_means)
 
-    # Mean and std across runs
     mean_bin_means = np.mean(all_bin_means, axis=0)
     std_bin_means = np.std(all_bin_means, axis=0)
 
-    # Bin labels (same across runs)
     bin_labels = bin_means.index.astype(str)
-
-    # Plot with std "brackets" (error bars)
     x = np.arange(len(bin_labels))
-    plt.figure(figsize=(10, 6))
-    plt.bar(x, mean_bin_means, yerr=std_bin_means, capsize=5,
-            color='skyblue', edgecolor='black', alpha=0.8)
 
-    plt.ylabel("Probability of edge existence")
-    plt.xlabel("Jaccard similarity bin")
-    plt.title("Social graph creation algorithm")
-    plt.xticks(x, bin_labels, rotation=45)
+    # --- Plot ---
+    plt.figure(figsize=(12, 7))
+
+    plt.title(
+        "Correlation Between Social and Contact Networks",
+        fontsize=20,
+        pad=20
+    )
+
+    plt.bar(
+        x,
+        mean_bin_means,
+        yerr=std_bin_means,
+        capsize=6,
+        color="skyblue",
+        edgecolor="black",
+        linewidth=1.3,
+        alpha=0.85
+    )
+
+    plt.xlabel("Jaccard Similarity Bin", fontsize=18)
+    plt.ylabel("Probability of Edge Existence", fontsize=18)
+
+    plt.xticks(x, bin_labels, rotation=45, fontsize=16)
+    plt.yticks(fontsize=16)
+
+    plt.grid(axis="y", alpha=0.3, linestyle="--")
+
     plt.tight_layout()
     plt.show()
 
-    return df, bin_means 
+    return df, bin_means
 
 # num_comparisons is the number of random vs non-random seed sets to compare
 def random_vs_nonrandom_seeds(num_comparisons):
@@ -269,8 +294,8 @@ def random_vs_nonrandom_seeds(num_comparisons):
                 contact_network=deepcopy(contact_network),
                 social_network=deepcopy(social_network),
                 T=T, Repeat=Repeat,
-                beta=beta, gamma=gamma, mu=mu, init=init, q="r",
-                allow_restoration=True,
+                beta=beta, gamma=gamma, mu=mu, init=init, q=T,
+                allow_restoration=True, adherence=1.0,
                 seeds=random_seeds[:i]
             )[2]
             inner_random_avg.append(np.mean(data_random[1]))
@@ -282,8 +307,8 @@ def random_vs_nonrandom_seeds(num_comparisons):
                 contact_network=deepcopy(contact_network),
                 social_network=deepcopy(social_network),
                 T=T, Repeat=Repeat,
-                beta=beta, gamma=gamma, mu=mu, init=init, q="r",
-                allow_restoration=True,
+                beta=beta, gamma=gamma, mu=mu, init=init, q=T,
+                allow_restoration=True, adherence=1.0,
                 seeds=non_random_seeds[:i]
             )[2]
             inner_nonrandom_avg.append(np.mean(data_nonrandom[1]))
@@ -343,8 +368,9 @@ def pickle_load(filename='experiment_data/pickles.pkl'):
     # Now `data` holds the deserialized object
     print(data)
 
+# Plot SIR curves at varying adherence levels
 def compare_infections_adherence(adherence):
-    num_trials = 10
+    num_trials = 25
 
     T_runs = []
     Y_runs_full_adherence = []
@@ -401,11 +427,13 @@ def compare_infections_adherence(adherence):
 
 # SIRS w/ param q = "r" (edges removed until recovery) and adherence parameter
 def r_quarantine():
-    num_trials = 10
+    num_trials = 25
 
     T_runs = []
     Y_runs_r_quarantine = []
     Y_runs_noquarantine = []
+
+    adherence = 1.0
 
     for _ in range(num_trials):
         # With r-quarantine
@@ -414,7 +442,7 @@ def r_quarantine():
             social_network=deepcopy(social_network),
             T=T, Repeat=Repeat,
             beta=beta, gamma=gamma, mu=mu, init=init,
-            average_data=False, q="r",
+             q="r", adherence=1.0,
             allow_restoration=True
         )[2]
         T_runs.append(data1[0])
@@ -426,7 +454,7 @@ def r_quarantine():
             social_network=deepcopy(social_network),
             T=T, Repeat=Repeat,
             beta=beta, gamma=gamma, mu=mu, init=init,
-            average_data=False, q=False,
+             q=False,
             allow_restoration=False
         )[2]
         Y_runs_noquarantine.append(data2[1])
@@ -456,8 +484,8 @@ def r_quarantine():
 
     return (x, mean_rq, std_rq), (x, mean_noq, std_noq)
 
-# compare_infections_adherence(0.75)
-
+# random_vs_nonrandom_seeds(4)
 # plot_jaccard_similarity()
-
-random_vs_nonrandom_seeds(4)
+const_quarantines()
+normal_dist_quarantines()
+r_quarantine()

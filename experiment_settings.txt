@@ -1,0 +1,9 @@
+n = 200  # number of nodes
+p = 0.05  # probability of edge existence
+density_social = 2 * density_contact
+beta = 0.15  # Infection rate
+gamma = 0.07  # Recovery rate
+mu = 0.10  # Immunity loss rate
+init = 0.15 # Initial infected portion
+T = 100
+split_point = 30 # Time when quarantining begins

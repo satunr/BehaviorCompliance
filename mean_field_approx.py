@@ -17,6 +17,11 @@ import sys
 #
 #----------
 
+write_file = "experiment_data/mfa_xy_data.txt"
+# Overwrite write_file if provided as command line argument
+if len(sys.argv) > 1:
+    write_file = sys.argv[1]
+
 social_graph = None
 contact_graph = None
 
@@ -27,7 +32,10 @@ p = 0.05  # probability of edge
 clear = False  # Set clear to True if you want to use a new network or clear data files. False if you want to keep the existing one.
 verbose = True  # Set verbose to True if you want to see detailed output during optimization
 
-adherence = 0.6
+adherence = 1.0 # Proportion of individuals who sever contact edges upon infection
+# Overwrite adherence if provided as command line argument
+if len(sys.argv) > 2:
+    adherence = float(sys.argv[2])
 
 # Simulation parameters
 T = 100
@@ -44,7 +52,7 @@ density_social = None  # Set to None for default density, or an integer number o
 # Clear data files
 def truncate_files():
     files_to_truncate = ["experiment_data/mfa_contact.gml", "experiment_data/mfa_social.gml", 
-                         "experiment_data/mfa_xy_data.txt"]
+                         write_file]
     for file in files_to_truncate:
         if os.path.exists(file):
             with open(file, 'w') as f:
@@ -180,9 +188,8 @@ for time in range(T):
     true_w.append((true_w1, true_w2))
 
 # eps_w1: Controls exploration of w1
-# alpha: Controls how much w1 is influenced by the running average
 # eps_w2: Controls smoothness of w2
-def optimize_segment(start=1, end=T, bounds = [(1, binomial_bound), (0, 1)],eps_w1=binomial_bound, eps_w2=0.075, alpha=1.0, num_runs=25):
+def optimize_segment(start=1, end=T, bounds = [(1, binomial_bound), (0, 1)],eps_w1=binomial_bound, eps_w2=0.075, num_runs=25):
 
     #---------
     #
@@ -204,7 +211,7 @@ def optimize_segment(start=1, end=T, bounds = [(1, binomial_bound), (0, 1)],eps_
         for t in range(start, end): 
             T_gen = t
             init_guess = None
-            eps_w1 = temp * ((1 - t/T)**0.25)  # Polynomial root decay of eps_w1 over time
+            eps_w1 = temp * ((1 - t/T)**0.5)  # Polynomial root decay of eps_w1 over time
 
             if w1_run_avg == None or prev_w2 == None:
                 init_guess = [random.uniform(1, binomial_bound), true_w[T_gen][1]]
@@ -216,7 +223,6 @@ def optimize_segment(start=1, end=T, bounds = [(1, binomial_bound), (0, 1)],eps_
             result = minimize(lambda params: loss(params, w1_run_avg, prev_w2, T_gen, eps_w1=eps_w1, eps_w2=eps_w2), init_guess, method='L-BFGS-B', bounds=bounds)
 
             w1 = result.x[0]
-            w1 = alpha * w1 + (1 - alpha) * w1_run_avg if w1_run_avg is not None else w1  # Apply run average smoothing
             w1_estimates.append(w1)
             w1_run_avg = np.mean(w1_estimates)  # Update run average for w1
             w2 = result.x[1]
@@ -245,7 +251,6 @@ def optimize_segment(start=1, end=T, bounds = [(1, binomial_bound), (0, 1)],eps_
     return w1_avg, w2_avg
 
 # Split_point: None means no split, otherwise it is the time to split the optimization
-# TODO: Handle the "all_runs" logic even when split point is not None
 def drive_optimizer(split_point=None):
     w1_all_runs = []
     w2_avg = []
@@ -348,7 +353,7 @@ def save_xy_data(dynamic_deg=None, w1_avg=None, w2_avg=None, w1_all_runs=None, s
             # Delete all empty runs
             w1_all_runs = [run for run in w1_all_runs if len(run) > 0]
 
-    with open("experiment_data/mfa_xy_data.txt", "a") as f:
+    with open(write_file, "a") as f:
         f.write("==New Sample==\n")
 
         f.write("Number of nodes: " + str(n) + "\n\n")

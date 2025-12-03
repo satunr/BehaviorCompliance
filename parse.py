@@ -3,6 +3,12 @@ import correlated_graphs
 import matplotlib.pyplot as plt
 import random
 
+#---------------
+#
+#  Parse a network from a text file
+#
+#---------------
+
 # F = open('../Social/Freemans_EIES-1_n48.txt', 'r')
 # G = nx.Graph()
 # Th = 1
