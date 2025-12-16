@@ -7,7 +7,7 @@ import pickle
 # even_or_odd = 0: only plot first half (k_0) estimates
 # even_or_odd = 1: only plot second half (k_q) estimates
 # even_or_odd = 2: plot all samples
-def plot_independence(samples, even_or_odd):
+def plot_optimizer_results(samples, even_or_odd):
     plt.figure(figsize=(12, 7))
 
     results_list = []   # ← store results for pickle saving
@@ -42,7 +42,7 @@ def plot_independence(samples, even_or_odd):
         # --- Plot estimate & retrieve its color ---
         line = plt.plot(
             time_points, mean_w1,
-            label=f'Sample {i} Estimate (β = {0.15 - 0.03 * i})'
+            label=f'(β = {0.15 - 0.03 * i})'
         )[0]
 
         color = line.get_color()
@@ -61,7 +61,7 @@ def plot_independence(samples, even_or_odd):
                 y=true_val, xmin=0, xmax=time_points[-1],
                 linestyles='--',
                 color=color,
-                label=f'Sample {i} Ground Truth'
+                label=f'Ground Truth'
             )
 
         # --- Save to results list for pickling ---
@@ -75,7 +75,13 @@ def plot_independence(samples, even_or_odd):
 
     plt.xlabel('Time')
     plt.ylabel('Degree Estimate from Optimizer')
-    plt.title(r'$\langle k_q \rangle$ Estimates with Varying $\beta$')
+    # --- Set title based on whether the optimization was for <k_0> or <k_q> ---
+    if even_or_odd == 0:
+        plt.title(r'$\langle k_0 \rangle$ Estimates with Varying $\beta$')
+    elif even_or_odd == 1:
+        plt.title(r'$\langle k_q \rangle$ Estimates with Varying $\beta$')
+    else:
+        plt.title(r'$\langle k \rangle$ Estimates with Varying $\beta$')
     plt.legend()
     plt.grid(True)
     plt.show()
@@ -85,4 +91,4 @@ def plot_independence(samples, even_or_odd):
         pickle.dump(results_list, f)
 
 samples = extract_mfa.parse_sample_data('experiment_data/mfa_xy_data.txt')
-plot_independence(samples, even_or_odd=2)
+plot_optimizer_results(samples, even_or_odd=0)

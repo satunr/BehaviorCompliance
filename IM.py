@@ -143,4 +143,3 @@ def LT(g, threshold, initial_active: set = None):
                     new_ones = True
 
     return list(influence_result)
-

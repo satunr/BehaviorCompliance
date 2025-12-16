@@ -269,17 +269,16 @@ def drive_optimizer(split_point=None):
     w1_avg2, w2_avg2 = None, None
 
     if split_point is not None:
-        w1_all_runs_1, w2_avg1 = optimize_segment(start=1, end=split_point)
-        w1_all_runs_2, w2_avg2 = optimize_segment(start=split_point, end=T)
+        w1_all_runs1, w2_avg1 = optimize_segment(start=1, end=split_point)
+        w1_all_runs2, w2_avg2 = optimize_segment(start=split_point, end=T)
 
         #  Run-wise average of w1 across runs
-        w1_avg1 = np.mean(w1_all_runs_1, axis=0)
+        w1_avg1 = np.mean(w1_all_runs1, axis=0)
         w2_avg1 = np.mean(w2_avg1, axis=0)
-        w1_avg2 = np.mean(w1_all_runs_2, axis=0)
+        w1_avg2 = np.mean(w1_all_runs2, axis=0)
         w2_avg2 = np.mean(w2_avg2, axis=0)
 
-        # w1_all_runs combines both segments for output
-        return w1_avg1, w2_avg1, w1_avg2, w2_avg2, w1_all_runs_1 + w1_all_runs_2
+        return w1_avg1, w2_avg1, w1_avg2, w2_avg2, w1_all_runs1, w1_all_runs2
 
 #-------------
 #
@@ -407,9 +406,9 @@ if split_point is None:
     w1_run_avg, w2_run_avg, w1_all_runs = drive_optimizer(split_point=None)
     save_xy_data(w1_avg=w1_run_avg, w2_avg=w2_run_avg, w1_all_runs=w1_all_runs)
 else:
-    w1_avg1, w2_avg1, w1_avg2, w2_avg2, w1_all_runs = drive_optimizer(split_point=split_point)
-    save_xy_data(dynamic_deg=dynamic_deg, w1_avg=w1_avg1, w2_avg=w2_avg1, w1_all_runs=w1_all_runs, split=(split_point, 1))
-    save_xy_data(dynamic_deg=dynamic_deg, w1_avg=w1_avg2, w2_avg=w2_avg2, w1_all_runs=w1_all_runs, split=(split_point, 2))
+    w1_avg1, w2_avg1, w1_avg2, w2_avg2, w1_all_runs1, w1_all_runs2 = drive_optimizer(split_point=split_point)
+    save_xy_data(dynamic_deg=dynamic_deg, w1_avg=w1_avg1, w2_avg=w2_avg1, w1_all_runs=w1_all_runs1, split=(split_point, 1))
+    save_xy_data(dynamic_deg=dynamic_deg, w1_avg=w1_avg2, w2_avg=w2_avg2, w1_all_runs=w1_all_runs2, split=(split_point, 2))
 
 # Save daily infected and daily recovered counts to file
 # Will be used in comparing ideal vs actual quarantine dynamics

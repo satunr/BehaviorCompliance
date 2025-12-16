@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import minimize
 from mpl_toolkits.mplot3d import Axes3D
+import random
 
 # ---------------------------
 #  Settings & output filename
@@ -20,10 +21,20 @@ plt.rcParams.update({
     "ytick.labelsize": 13
 })
 
+# read_file = "experiment_data/mfa_xy_data.txt"
+read_file = ("experiment_data/a_0.6")
 # ---------------------------
 #  Load samples
 # ---------------------------
-samples = extract_mfa.parse_sample_data("experiment_data/mfa_xy_data.txt")
+samples = extract_mfa.parse_sample_data(read_file)
+
+# Shorten every sample to first 70 time steps (T = 100 days, quarantine at day 30) for faster testing
+#   Can comment out for full runs
+for sample in samples:
+    for key in sample:
+        if isinstance(sample[key], dict) and 'y' in sample[key]:
+            sample[key]['y'] = sample[key]['y'][:70]
+            sample[key]['x'] = sample[key]['x'][:70]
 
 k_0 = samples[0]['w1 True (Mean Node Degree)']['y'][-1]
 # k_0 = samples[0]['w1 Estimated']['y'][-1]
@@ -47,19 +58,19 @@ num_simulations = int(num_simulations_total / 2)
 # ---------------------------
 #  Build list of informed&infected proportions per run (post-quarantine)
 # ---------------------------
-inf_inf_lst = []
+inf_inf_runs = []
 for r in range(num_simulations):
     index = r * 2 + 1  # odd indices
     informed_and_infected = samples[index]['Informed and Infected']['y']
     proportions = [x / population for x in informed_and_infected]
-    inf_inf_lst.append(proportions)
+    inf_inf_runs.append(proportions)
 
 # Collection of i_prime curves
-inf_inf_lst = np.array(inf_inf_lst)  # shape: (runs, T_after_q)
-T = inf_inf_lst.shape[1]
+inf_inf_runs = np.array(inf_inf_runs)  # shape: (runs, T_after_q)
+T = inf_inf_runs.shape[1]
 
 # Average informed&infected proportion over runs (i_prime)
-i_prime = np.mean(inf_inf_lst, axis=0)  # shape: (T,)
+i_prime = np.mean(inf_inf_runs, axis=0)  # shape: (T,)
 
 # --------------
 #
@@ -78,7 +89,7 @@ def k_expected(informed_and_infected, current_time):
 # Compute adherence estimates per run using naive formula
 adherence_ests = []
 for s in range(num_simulations):
-    k_eff = k_expected(inf_inf_lst[s], T)
+    k_eff = k_expected(inf_inf_runs[s], T)
 
     adherence_est = 1 - ((k_q - k_eff) / (k_q)) if k_q != 0 else 0
     adherence_ests.append(adherence_est)
@@ -88,13 +99,18 @@ adherence_mean = float(np.mean(adherence_ests))
 print("Naive approximation for adherence (avg over runs):", adherence_mean)
 
 # Compute true k_q time-series (average over runs)
-k_q_lst_avg = []
+k_q_runs = []
 for r in range(num_simulations):
     index = r * 2 + 1
     k_q_lst = samples[index]['Dynamic degree']['y']
-    k_q_lst_avg.append(k_q_lst)
-k_q_true = np.mean(k_q_lst_avg, axis=0)  # shape: (T,)
-k_q_true_std = np.std(k_q_lst_avg, axis=0)
+    k_q_runs.append(k_q_lst)
+
+# Quick debug point
+for r, lst in enumerate(k_q_runs):
+    print(r, len(lst))
+
+k_q_true = np.mean(k_q_runs, axis=0)  # shape: (T,)
+k_q_true_std = np.std(k_q_runs, axis=0)
 
 # -------------
 # Joint optimization (S, adherence) per-run
@@ -112,8 +128,8 @@ def mse_loss(params, i_prime_cur):
 #---------------
 
 # --- Define ranges for the parameters ---
-S_vals = np.linspace(0, 2, 50)          # adjust as needed
-adherence_vals = np.linspace(0, 1, 10)  # adjust as needed
+S_vals = np.linspace(0, 2, 50)     
+adherence_vals = np.linspace(0, 1, 10)
 
 S_grid, A_grid = np.meshgrid(S_vals, adherence_vals)
 
@@ -145,14 +161,25 @@ ax.set_title("MSE Loss Surface")
 fig.colorbar(surf, shrink=0.5, aspect=10)
 plt.show()
 
+#---------------
+#
+#  Joint optimization to find best (S, adherence)
+#
+#---------------
+
+# Parameter bounds
 S_RANGE = (1.0, 2.0)
 ADHERENCE_RANGE = (0.0, 1.0)
 
+# List of optimal parameters per run
 best_S_lst = []
 best_adh_lst = []
 
+# NOTE: Should we optimize on the average curve instead of per-run curves?
+# Iterate over runs in samples
 for r in range(num_simulations):
-    res = minimize(lambda params: mse_loss(params, inf_inf_lst[r]),
+    # Optimize for a given run
+    res = minimize(lambda params: mse_loss(params, inf_inf_runs[r]),
                    x0=[1.5, 0.5],
                    bounds=[S_RANGE, ADHERENCE_RANGE],
                    method='L-BFGS-B',
@@ -172,13 +199,14 @@ print("S std:", S_std, "adherence std:", adherence_std)
 print("Approximate adherence confidence interval (95%):", (best_adherence - 1.96 * (adherence_std / np.sqrt(num_simulations)),
                                          best_adherence + 1.96 * (adherence_std / np.sqrt(num_simulations))))
 
+# NOTE: Should k_q_est_best be computed using best_S and best_adherence from average, or per-run estimates?
 # estimated k_q using average best parameters (curve)
 k_q_est_best = np.array([k_0 * (1 - best_S * best_adherence * i_prime[t]) for t in range(len(i_prime))])
 
 # per-run k_q estimates for computing mean/std bands
 k_q_est_runs = []
 for r in range(num_simulations):
-    run_est = np.array([k_0 * (1 - best_S_lst[r] * best_adh_lst[r] * inf_inf_lst[r][t]) for t in range(len(i_prime))])
+    run_est = np.array([k_0 * (1 - best_S_lst[r] * best_adh_lst[r] * inf_inf_runs[r][t]) for t in range(len(i_prime))])
     k_q_est_runs.append(run_est)
 k_q_est_runs = np.array(k_q_est_runs)
 k_q_est_mean = np.mean(k_q_est_runs, axis=0)
@@ -211,25 +239,38 @@ plt.tight_layout()
 plt.show()
 
 # ---------------------------
+#
 # CUMULATIVE OPTIMIZATION: estimate adherence time-series per run
+#
 # ---------------------------
-# Compute for each run r: adh_hat_r[t] = estimate using data up to t (t >= 1)
+
+# Compute for each run r: adh_hat_r[t] = estimate using data up to t
 cumulative_adh = np.zeros((num_simulations, T))  # runs x time
 
+# Iterate over runs in samples
 for r in range(num_simulations):
-    i_prime_run = inf_inf_lst[r]  # length T
-    for t in range(1, T + 1):     # use first t points (t from 1..T)
-        i_prime_subset = np.array(i_prime_run[:t])
-        k_q_true_subset = np.array(k_q_true[:t])
+    # Infected and informed time-series for this run
+    i_prime_run = inf_inf_runs[r]  # length T
+    # Dynamic degree time-series for this run
+    k_q_run = k_q_runs[r]  # length T
 
+    #--------------
+    # Optimize adherence estimate, scale factor for each t
+    #--------------
+    for t in range(1, T + 1):     # use first t points (t from 1..T)
+        # Define cumulative slices of the time-series
+        i_prime_subset = np.array(i_prime_run[:t])
+        k_q_true_subset = np.array(k_q_run[:t])
+
+        # Objective function for this slice: MSE between true k_q and estimated k_q for the respective run
         def mse_slice(params):
+            # Parameters to optimize: S, adherence
             S_val, adh_val = params
             k_q_est_slice = k_0 * (1 - S_val * adh_val * i_prime_subset)
             return float(np.mean((k_q_true_subset - k_q_est_slice) ** 2))
 
-        # initial guess: keep within bounds
-        res = minimize(mse_slice, x0=[1.5, 0.5], bounds=[S_RANGE, ADHERENCE_RANGE], method='L-BFGS-B')
-        # store adherence (index 1); note: res.x[1] exists even if optimization not perfect
+        res = minimize(mse_slice, x0=[random.uniform(1,2), random.uniform(0,1)], bounds=[S_RANGE, ADHERENCE_RANGE], method='L-BFGS-B')
+        # store adherence estimate
         cumulative_adh[r, t-1] = float(res.x[1])
 
 # Compute mean and std across runs for each t
@@ -251,7 +292,7 @@ plt.hlines(y=adhering_proportion, xmin=t_vals[0], xmax=t_vals[-1],
             label='True adherence')
 plt.xlabel('Time (days)', fontsize=15)
 plt.ylabel('Estimated adherence', fontsize=15)
-plt.title('Adherence Estimate Over Time', fontsize=17)
+plt.title('Cumulative Adherence Estimate', fontsize=17)
 plt.ylim(0, 1.05)
 plt.grid(True, alpha=0.3)
 plt.legend(fontsize=12)
@@ -270,7 +311,7 @@ save_dict = {
     "num_simulations": int(num_simulations),
     "time_after_q": int(T),
     "i_prime_mean": i_prime.tolist(),
-    "inf_inf_runs": inf_inf_lst.tolist(),
+    "inf_inf_runs": inf_inf_runs.tolist(),
     "k_q_true": k_q_true.tolist(),
     "best_S_lst": [float(x) for x in best_S_lst],
     "best_adh_lst": [float(x) for x in best_adh_lst],

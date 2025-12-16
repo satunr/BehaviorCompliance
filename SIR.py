@@ -8,6 +8,9 @@ import correlated_graphs
 import IM
 from copy import deepcopy
 
+#NOTE: Changed p from p = 0.05 to p = 0.03 in IC model to reduce spread of information
+#      (<k_q>_optimizer had an asymptote at 0.6 instead of 1.0)
+
 def sirs_step(G, state, L, beta, gamma, mu):
     # Copy the current state to avoid modifying the dictionary while iterating
     new_state = state.copy()
@@ -64,13 +67,6 @@ def update_N_P(P, N, n, a=0.5, v=0.05):
 
     return P_prime, P, N
 
-#-----------
-#
-#  This defines what quarantining will actually do (remove neighboring edges), 
-#   and its corresponding probabilities
-#
-#-----------
-
 # g: A graph, (mean, std): Parameters assoc. with taking P(edge removal) as a normal dist. sample, 
 #   w/ threshold as another param.
 def quarantine_edge_removal(g, node, states, quarantine_statuses, already_quarantining):
@@ -113,6 +109,7 @@ def restore_edges(g_init, g, node, already_quarantining):
 # lt_threshold: Set to none for independent cascade model, or an int value for linear threshold model
 # adherence: Set to a float value between 0 and 1. Ratio of individuals that will adhere to quarantine measures.
 # seeds: a list of seed nodes
+# FIXME: allow_restoration is redundant. Could just do q=T if you don't want restoration
 def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,
                  q=False,allow_restoration=False,save_all=False,lt_threshold=None,adherence=None,begin_q=0,seeds=None):
     if begin_q is None:
@@ -207,11 +204,11 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,
 
         for t in range(T):
 
-            #--------
+            #-------------
             #
             #  Make social network changes
             #
-            #-------
+            #-------------
 
             # People are unaware of disease spread/quarantining measures
             if t < begin_q:
@@ -260,11 +257,11 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,
                 informed = informed + new_informed
                 informed = list(set(informed))  # Remove duplicates
 
-            #--------
+            #-------------
             #
             #  Make contact network changes
             #
-            #--------
+            #-------------
 
             # Dynamic updates
             P_prime, P, N = update_N_P(P, N, n)
