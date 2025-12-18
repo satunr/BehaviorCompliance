@@ -154,21 +154,6 @@ def loss(params, w1_run_avg, prev_w2, T_gen, eps_w1, eps_w2):
 
     return ((y_pred - y_true(T_gen)) ** 2) + penalties
 
-total_time = T  # Save this value for writing daily infections, recoveries to file
-# Mean-field approximation loses accuracy for small i
-# -> Trim simulation; find where newly infected ratio < smallest_accurate_ratio
-start = 5  # Ignore insufficient numbers at the start. Experimentally determined.
-smallest_accurate_ratio = 0.05  # Minimum ratio of infected nodes to total nodes to consider the simulation accurate. Experimentally determined.
-for t in range(start, T):
-    i = sum(1 for node in contact_graph.nodes() if true_dynamics[t][node] == 1) / len(contact_graph.nodes())
-    if i < smallest_accurate_ratio:
-        T = t + 1
-        break
-
-# If split_point > T, indexxing issues will arise
-if split_point is not None:
-    assert split_point <= T, "Split point must be less than or equal to T"
-
 if split_point is not None:
     seg1 = deg_lst[:split_point]
     mean1 = np.mean(seg1)
@@ -333,7 +318,7 @@ def save_xy_data(dynamic_deg=None, w1_avg=None, w2_avg=None, w1_all_runs=None, s
             given_n_i = given_n_i[:sp]
             infm = infm[:sp]
             # Save <k_0> runs
-            w1_all_runs = [run[:sp] for run in w1_all_runs]
+            w1_all_runs = [run for run in w1_all_runs]
             # Delete all empty runs
             w1_all_runs = [run for run in w1_all_runs if len(run) > 0]
         if half == 2:
@@ -341,14 +326,14 @@ def save_xy_data(dynamic_deg=None, w1_avg=None, w2_avg=None, w1_all_runs=None, s
             sir_infections_y = sir_infections_y[sp:]
             dynamic_deg = dynamic_deg[sp:]
             w1_true_y = w1_true_y[sp:]
-            w1_est_y = w1_est_y[sp:]
+            w1_est_y = w1_est_y
             w2_true_y = w2_true_y[sp:]
-            w2_est_y = w2_est_y[sp:]
+            w2_est_y = w2_est_y
             i_and_inf = i_and_inf[sp:]
             given_n_i = given_n_i[sp:]
             infm = infm[sp:]
             # Save <k_q> runs
-            w1_all_runs = [run[sp:] for run in w1_all_runs]
+            w1_all_runs = [run for run in w1_all_runs]
             # Delete all empty runs
             w1_all_runs = [run for run in w1_all_runs if len(run) > 0]
 
@@ -415,11 +400,11 @@ else:
 def save_daily_infected_recovered():
     with open("experiment_data/infected_recovered.txt", "w") as f:
         f.write(f"Split point: {split_point}\n")
-        f.write(f"Total nodes: {n}\n")
+        f.write(f"Total nodes: {len(contact_graph.nodes())}\n")
         f.write("Day,Newly Infected,Newly Recovered\n")
         
         # Start from day 1 because day 0 has no "previous day" to compare against
-        for day in range(1, total_time):
+        for day in range(1, T):
             newly_infected = sum(
                 1
                 for node in contact_graph.nodes()

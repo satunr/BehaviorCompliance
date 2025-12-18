@@ -22,7 +22,7 @@ plt.rcParams.update({
 })
 
 # read_file = "experiment_data/mfa_xy_data.txt"
-read_file = ("experiment_data/a_0.6")
+read_file = ("experiment_data/a_1.0")
 # ---------------------------
 #  Load samples
 # ---------------------------

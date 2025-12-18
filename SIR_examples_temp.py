@@ -1,3 +1,4 @@
+
 import networkx as nx
 import SIR
 import correlated_graphs
@@ -9,32 +10,44 @@ import pandas as pd
 import random
 import find_seeds
 
+# Global matplotlib settings for publication-quality figures
+plt.rcParams.update({
+    "font.size": 18,
+    "axes.titlesize": 22,
+    "axes.labelsize": 20,
+    "xtick.labelsize": 16,
+    "ytick.labelsize": 16,
+    "legend.fontsize": 16,
+    "lines.linewidth": 2.5,
+})
+
+# Consistent figure size for all plots (suitable for Overleaf inclusion)
+FIGURE_SIZE_LINE = (10, 6)
+FIGURE_SIZE_BAR = (14, 8)
+
 n = 200
 T = 100
 Repeat = 1
 
-beta = 0.15  #infection rate
-gamma = 0.07  # recovery rate
-mu = 0.10   # immunity loss
+beta = 0.15
+gamma = 0.07
+mu = 0.10
 init = 0.15
 
 contact_network = nx.erdos_renyi_graph(n=n, p=0.05, seed=42)
 n_contact = contact_network.number_of_nodes()
 
-# social_network = nx.erdos_renyi_graph(100, 0.05, seed=42)  # Placeholder for social network, replace with actual creation logic
 social_network = correlated_graphs.create_social_graph(contact_network, nE = 2 * n_contact)[0]
-social_network = social_network.to_directed()  # Ensure the social network is directed
+social_network = social_network.to_directed()
 
-# Plot SIR curve with and without informed individuals quarantining
 def informed_vs_noninformed(plot_data=False):
     T_runs = []
     Y_runs_informed = []
     Y_runs_noninformed = []
 
-    num_trials = 10  # Number of simulations to average over
+    num_trials = 10
 
     for _ in range(num_trials):
-        # Informed
         data_inf = SIR.Simulate_SIR(
             contact_network=deepcopy(contact_network),
             social_network=deepcopy(social_network),
@@ -45,7 +58,6 @@ def informed_vs_noninformed(plot_data=False):
         T_runs.append(data_inf[0])
         Y_runs_informed.append(data_inf[1])
 
-        # Non-informed
         data_noninf = SIR.Simulate_SIR(
             contact_network=deepcopy(contact_network),
             social_network=deepcopy(social_network),
@@ -55,40 +67,37 @@ def informed_vs_noninformed(plot_data=False):
         )[2]
         Y_runs_noninformed.append(data_noninf[1])
 
-    # Use the first time array (assumes they're the same for all runs)
     x = T_runs[0]
 
-    # Convert lists to numpy arrays for easier manipulation
     y_informed = np.array(Y_runs_informed)
     y_noninformed = np.array(Y_runs_noninformed)
 
-    # Compute mean and std deviation
     mean_inf = np.mean(y_informed, axis=0)
     std_inf = np.std(y_informed, axis=0)
 
     mean_noninf = np.mean(y_noninformed, axis=0)
     std_noninf = np.std(y_noninformed, axis=0)
 
-    if plot_data == True:
-        # Plot with fill_between for both
-        plt.plot(x, mean_inf, label='With quarantine', color='blue')
-        plt.fill_between(x, mean_inf - std_inf, mean_inf + std_inf, color='blue', alpha=0.3)
+    if plot_data:
+        fig, ax = plt.subplots(figsize=FIGURE_SIZE_LINE)
+        ax.plot(x, mean_inf, label='With quarantine', color='blue')
+        ax.fill_between(x, mean_inf - std_inf, mean_inf + std_inf, color='blue', alpha=0.3)
 
-        plt.plot(x, mean_noninf, label='Without quarantine', color='red')
-        plt.fill_between(x, mean_noninf - std_noninf, mean_noninf + std_noninf, color='red', alpha=0.3)
+        ax.plot(x, mean_noninf, label='Without quarantine', color='red')
+        ax.fill_between(x, mean_noninf - std_noninf, mean_noninf + std_noninf, color='red', alpha=0.3)
 
-        # Customize plot
-        plt.xlabel('Time')
-        plt.ylabel('# of Infected')
-        plt.title('SIR with Permanent Quarantine')
-        plt.legend()
-        plt.grid(True)
+        ax.set_xlabel('Time')
+        ax.set_ylabel('# of Infected')
+        ax.set_title('SIR with Permanent Quarantine')
+        ax.legend()
+        ax.grid(True)
 
-        plt.show()
+        plt.tight_layout()
+        plt.savefig('informed_vs_noninformed.pdf', bbox_inches='tight')
+        plt.close()
 
     return (x, mean_inf, std_inf), (x, mean_noninf, std_noninf)
 
-# Plot SIR curve with constant quarantine vs no quarantine
 def const_quarantines(plot_data=False):
     quarantine_constant = 14
     num_trials = 25
@@ -100,7 +109,6 @@ def const_quarantines(plot_data=False):
     adherence = 1.0
 
     for _ in range(num_trials):
-        # With constant quarantine
         data1 = SIR.Simulate_SIR(
             contact_network=deepcopy(contact_network),
             social_network=deepcopy(social_network),
@@ -112,7 +120,6 @@ def const_quarantines(plot_data=False):
         T_runs.append(data1[0])
         Y_runs_quarantine.append(data1[1])
 
-        # Without quarantine
         data2 = SIR.Simulate_SIR(
             contact_network=deepcopy(contact_network),
             social_network=deepcopy(social_network),
@@ -133,23 +140,26 @@ def const_quarantines(plot_data=False):
     mean_noq = np.mean(y_noq, axis=0)
     std_noq = np.std(y_noq, axis=0)
 
-    if plot_data == True:
-        plt.plot(x, mean_q, label=f'With constant quarantine (q={quarantine_constant})', color='blue')
-        plt.fill_between(x, mean_q - std_q, mean_q + std_q, color='blue', alpha=0.3)
+    if plot_data:
+        fig, ax = plt.subplots(figsize=FIGURE_SIZE_LINE)
+        ax.plot(x, mean_q, label=f'With constant quarantine (q={quarantine_constant})', color='blue')
+        ax.fill_between(x, mean_q - std_q, mean_q + std_q, color='blue', alpha=0.3)
 
-        plt.plot(x, mean_noq, label='Without quarantine', color='red')
-        plt.fill_between(x, mean_noq - std_noq, mean_noq + std_noq, color='red', alpha=0.3)
+        ax.plot(x, mean_noq, label='Without quarantine', color='red')
+        ax.fill_between(x, mean_noq - std_noq, mean_noq + std_noq, color='red', alpha=0.3)
 
-        plt.xlabel('Time')
-        plt.ylabel('# of Infected')
-        plt.title('SIR with Constant Quarantine')
-        plt.legend()
-        plt.grid(True)
-        plt.show()
+        ax.set_xlabel('Time')
+        ax.set_ylabel('# of Infected')
+        ax.set_title('SIR with Constant Quarantine')
+        ax.legend()
+        ax.grid(True)
+
+        plt.tight_layout()
+        plt.savefig('const_quarantines.pdf', bbox_inches='tight')
+        plt.close()
 
     return (x, mean_q, std_q), (x, mean_noq, std_noq)
 
-# Plot SIR curve with normally-distributed quarantine vs no quarantine
 def normal_dist_quarantines(plot_data=False):
     num_trials = 25
 
@@ -160,7 +170,6 @@ def normal_dist_quarantines(plot_data=False):
     adherence = 1.0
 
     for _ in range(num_trials):
-        # With normally-distributed quarantine
         data1 = SIR.Simulate_SIR(
             contact_network=deepcopy(contact_network),
             social_network=deepcopy(social_network),
@@ -172,7 +181,6 @@ def normal_dist_quarantines(plot_data=False):
         T_runs.append(data1[0])
         Y_runs_normal.append(data1[1])
 
-        # Without quarantine
         data2 = SIR.Simulate_SIR(
             contact_network=deepcopy(contact_network),
             social_network=deepcopy(social_network),
@@ -193,36 +201,27 @@ def normal_dist_quarantines(plot_data=False):
     mean_noq = np.mean(y_noq, axis=0)
     std_noq = np.std(y_noq, axis=0)
 
-    if plot_data == True:
-        plt.plot(x, mean_norm, label='With Normal Dist. Quarantine', color='blue')
-        plt.fill_between(x, mean_norm - std_norm, mean_norm + std_norm, color='blue', alpha=0.3)
+    if plot_data:
+        fig, ax = plt.subplots(figsize=FIGURE_SIZE_LINE)
+        ax.plot(x, mean_norm, label='With Normal Dist. Quarantine', color='blue')
+        ax.fill_between(x, mean_norm - std_norm, mean_norm + std_norm, color='blue', alpha=0.3)
 
-        plt.plot(x, mean_noq, label='Without Quarantine', color='red')
-        plt.fill_between(x, mean_noq - std_noq, mean_noq + std_noq, color='red', alpha=0.3)
+        ax.plot(x, mean_noq, label='Without Quarantine', color='red')
+        ax.fill_between(x, mean_noq - std_noq, mean_noq + std_noq, color='red', alpha=0.3)
 
-        plt.xlabel('Time')
-        plt.ylabel('# of Infected')
-        plt.title('SIR with Normally Distributed Quarantine')
-        plt.legend()
-        plt.grid(True)
-        plt.show()
+        ax.set_xlabel('Time')
+        ax.set_ylabel('# of Infected')
+        ax.set_title('SIR with Normally Distributed Quarantine')
+        ax.legend()
+        ax.grid(True)
+
+        plt.tight_layout()
+        plt.savefig('normal_dist_quarantines.pdf', bbox_inches='tight')
+        plt.close()
 
     return (x, mean_norm, std_norm), (x, mean_noq, std_noq)
 
-# Plot Jaccard similarity between contact and social network 2-hop neighborhoods as X, 
-#   and existence of edge (0 or 1) as Y
-def plot_jaccard_similarity(num_runs=20, bins=10, plot_data=False):
-    plt.rcParams.update({
-        "font.size": 18,
-        "axes.titlesize": 22,
-        "axes.labelsize": 20,
-        "xtick.labelsize": 16,
-        "ytick.labelsize": 16,
-        "legend.fontsize": 16,
-        "lines.linewidth": 2.5,
-    })
-
-    # Load and preprocess graph
+def jaccard_similarity(num_runs=20, bins=10, plot_data=False):
     H = nx.read_gml('experiment_data/Freeman3.gml')
     H = nx.convert_node_labels_to_integers(H, first_label=0)
     contact_graph = H.to_undirected()
@@ -230,7 +229,6 @@ def plot_jaccard_similarity(num_runs=20, bins=10, plot_data=False):
     all_bin_means = []
 
     for _ in range(num_runs):
-        # Create social graph and compute similarities
         social_graph, sim = correlated_graphs.create_social_graph(
             contact_graph,
             nE=2 * contact_graph.number_of_edges()
@@ -254,7 +252,7 @@ def plot_jaccard_similarity(num_runs=20, bins=10, plot_data=False):
     if plot_data:
         x = np.arange(len(bin_labels))
 
-        fig, ax = plt.subplots(figsize=(16, 10))
+        fig, ax = plt.subplots(figsize=FIGURE_SIZE_LINE)
 
         ax.bar(
             x,
@@ -280,33 +278,20 @@ def plot_jaccard_similarity(num_runs=20, bins=10, plot_data=False):
         ax.grid(axis="y", linestyle="--", alpha=0.4)
 
         plt.tight_layout()
-        plt.show()
+        plt.savefig('jaccard_similarity.pdf', bbox_inches='tight')
+        plt.close()
 
     return df, bin_means
 
-# num_comparisons is the number of random vs non-random seed sets to compare
 def random_vs_nonrandom_seeds(num_comparisons, plot_data=False):
-    repeat = 10
+    repeat = 25
 
     infections_random = []
     infections_nonrandom = []
 
-    plt.rcParams.update({
-        "font.size": 18,
-        "axes.titlesize": 22,
-        "axes.labelsize": 20,
-        "xtick.labelsize": 16,
-        "ytick.labelsize": 16,
-        "legend.fontsize": 16,
-        "lines.linewidth": 2.5,
-    })
-
-    # Degree-based ordering (informational)
     degree_dict = dict(contact_network.degree())
     sorted_nodes = sorted(degree_dict, key=degree_dict.get, reverse=True)
-    print("Nodes sorted by degree:", sorted_nodes)
 
-    # Seed sets
     random_seeds = [
         random.choice(list(contact_network.nodes()))
         for _ in range(num_comparisons)
@@ -318,13 +303,7 @@ def random_vs_nonrandom_seeds(num_comparisons, plot_data=False):
         exponent=20
     )
 
-    # -----------------
-    # Simulations
-    # -----------------
     for i in range(1, num_comparisons + 1):
-        print("Run #:", i)
-
-        # Random seeds
         inner_random_avg = []
         for _ in range(repeat):
             data_random = SIR.Simulate_SIR(
@@ -345,7 +324,6 @@ def random_vs_nonrandom_seeds(num_comparisons, plot_data=False):
 
         infections_random.append(inner_random_avg)
 
-        # Non-random seeds
         inner_nonrandom_avg = []
         for _ in range(repeat):
             data_nonrandom = SIR.Simulate_SIR(
@@ -380,11 +358,11 @@ def random_vs_nonrandom_seeds(num_comparisons, plot_data=False):
         [np.std(run) for run in infections_nonrandom]
     )
 
-    if plot_data == True:
+    if plot_data:
         x = np.arange(1, num_comparisons + 1)
         width = 0.35
 
-        fig, ax = plt.subplots(figsize=(14, 8))
+        fig, ax = plt.subplots(figsize=FIGURE_SIZE_LINE)
 
         ax.bar(
             x - width / 2,
@@ -408,7 +386,6 @@ def random_vs_nonrandom_seeds(num_comparisons, plot_data=False):
             alpha=0.75
         )
 
-        # Proper y-limits including error bars
         y_max = max(
             np.max(avg_infections_random + std_infections_random),
             np.max(avg_infections_nonrandom + std_infections_nonrandom)
@@ -422,21 +399,21 @@ def random_vs_nonrandom_seeds(num_comparisons, plot_data=False):
         ax.set_ylim(y_min - 1, y_max + 1)
 
         ax.set_xlabel("Number of Seeds")
-        ax.set_ylabel("Average Number of Infected Nodes")
-        ax.set_title("Random vs Non-Random Seed Selection")
+        ax.set_ylabel("Average # of Infected")
+        ax.set_title("Random vs Degree-Based Seed Selection")
 
         ax.legend(frameon=False)
         ax.grid(axis="y", linestyle="--", alpha=0.6)
 
         plt.tight_layout()
-        plt.show()
+        plt.savefig('random_vs_nonrandom_seeds.pdf', bbox_inches='tight')
+        plt.close()
 
     return (
         (x, avg_infections_random, std_infections_random),
         (x, avg_infections_nonrandom, std_infections_nonrandom),
     )
 
-# Plot SIR curves at varying adherence levels
 def compare_infections_adherence(adherence, plot_data=False):
     num_trials = 25
 
@@ -445,9 +422,6 @@ def compare_infections_adherence(adherence, plot_data=False):
     Y_runs_partial_adherence = []
 
     for i in range(num_trials):
-        print("Run #: ", i)
-
-        # With constant quarantine
         data1 = SIR.Simulate_SIR(
             contact_network=deepcopy(contact_network),
             social_network=deepcopy(social_network),
@@ -458,7 +432,6 @@ def compare_infections_adherence(adherence, plot_data=False):
         T_runs.append(data1[0])
         Y_runs_full_adherence.append(data1[1])
 
-        # Without quarantine
         data2 = SIR.Simulate_SIR(
             contact_network=deepcopy(contact_network),
             social_network=deepcopy(social_network),
@@ -478,23 +451,26 @@ def compare_infections_adherence(adherence, plot_data=False):
     mean_partial = np.mean(y_partial, axis=0)
     std_partial = np.std(y_partial, axis=0)
 
-    if plot_data == True:
-        plt.plot(x, mean_full, label=f'With full adherence', color='blue')
-        plt.fill_between(x, mean_full - std_full, mean_full + std_full, color='blue', alpha=0.3)
+    if plot_data:
+        fig, ax = plt.subplots(figsize=FIGURE_SIZE_LINE)
+        ax.plot(x, mean_full, label=f'With full adherence', color='blue')
+        ax.fill_between(x, mean_full - std_full, mean_full + std_full, color='blue', alpha=0.3)
 
-        plt.plot(x, mean_partial, label='With partial adherence', color='red')
-        plt.fill_between(x, mean_partial - std_partial, mean_partial + std_partial, color='red', alpha=0.3)
+        ax.plot(x, mean_partial, label='With partial adherence', color='red')
+        ax.fill_between(x, mean_partial - std_partial, mean_partial + std_partial, color='red', alpha=0.3)
 
-        plt.xlabel('Time')
-        plt.ylabel('# of Infected')
-        plt.title('SIR with Constant Quarantine')
-        plt.legend()
-        plt.grid(True)
-        plt.show()
+        ax.set_xlabel('Time')
+        ax.set_ylabel('# of Infected')
+        ax.set_title('SIR with Constant Quarantine')
+        ax.legend()
+        ax.grid(True)
+
+        plt.tight_layout()
+        plt.savefig('compare_infections_adherence.pdf', bbox_inches='tight')
+        plt.close()
 
     return (x, mean_full, std_full), (x, mean_partial, std_partial)
 
-# SIRS w/ param q = "r" (edges removed until recovery) and adherence parameter
 def r_quarantine(plot_data=False):
     num_trials = 25
 
@@ -505,7 +481,6 @@ def r_quarantine(plot_data=False):
     adherence = 1.0
 
     for _ in range(num_trials):
-        # With r-quarantine
         data1 = SIR.Simulate_SIR(
             contact_network=deepcopy(contact_network),
             social_network=deepcopy(social_network),
@@ -517,7 +492,6 @@ def r_quarantine(plot_data=False):
         T_runs.append(data1[0])
         Y_runs_r_quarantine.append(data1[1])
 
-        # Without quarantine
         data2 = SIR.Simulate_SIR(
             contact_network=deepcopy(contact_network),
             social_network=deepcopy(social_network),
@@ -538,24 +512,28 @@ def r_quarantine(plot_data=False):
     mean_noq = np.mean(y_noq, axis=0)
     std_noq = np.std(y_noq, axis=0)
 
-    if plot_data == True:
-        plt.plot(x, mean_rq, label='With quarantine', color='blue')
-        plt.fill_between(x, mean_rq - std_rq, mean_rq + std_rq, color='blue', alpha=0.3)
+    if plot_data:
+        fig, ax = plt.subplots(figsize=FIGURE_SIZE_LINE)
+        ax.plot(x, mean_rq, label='With quarantine', color='blue')
+        ax.fill_between(x, mean_rq - std_rq, mean_rq + std_rq, color='blue', alpha=0.3)
 
-        plt.plot(x, mean_noq, label='Without quarantine', color='red')
-        plt.fill_between(x, mean_noq - std_noq, mean_noq + std_noq, color='red', alpha=0.3)
+        ax.plot(x, mean_noq, label='Without quarantine', color='red')
+        ax.fill_between(x, mean_noq - std_noq, mean_noq + std_noq, color='red', alpha=0.3)
 
-        plt.xlabel('Time')
-        plt.ylabel('# of Infected')
-        plt.title('SIR with Quarantine Until Recovery')
-        plt.legend()
-        plt.grid(True)
-        plt.show()
+        ax.set_xlabel('Time')
+        ax.set_ylabel('# of Infected')
+        ax.set_title('SIR with Quarantine Until Recovery')
+        ax.legend()
+        ax.grid(True)
+
+        plt.tight_layout()
+        plt.savefig('r_quarantine.pdf', bbox_inches='tight')
+        plt.close()
 
     return (x, mean_rq, std_rq), (x, mean_noq, std_noq)
 
 def permanent_quarantine(plot_data=False):
-    num_trials = 25 # Number of simulations to average over
+    num_trials = 25
     adherence = 1.0
 
     T_runs = []
@@ -563,7 +541,6 @@ def permanent_quarantine(plot_data=False):
     Y_runs_noquarantine = []
 
     for _ in range(num_trials):
-        # With permanent quarantine
         data1 = SIR.Simulate_SIR(
             contact_network=deepcopy(contact_network),
             social_network=deepcopy(social_network),
@@ -575,7 +552,6 @@ def permanent_quarantine(plot_data=False):
         T_runs.append(data1[0])
         Y_runs_quarantine.append(data1[1])
 
-        # Without quarantine
         data2 = SIR.Simulate_SIR(
             contact_network=deepcopy(contact_network),
             social_network=deepcopy(social_network),
@@ -594,28 +570,30 @@ def permanent_quarantine(plot_data=False):
     mean_noq = np.mean(y_noq, axis=0)
     std_noq = np.std(y_noq, axis=0)
 
-    if plot_data == True:
-        plt.plot(x, mean_q, label=f'With quarantine', color='blue')
-        plt.fill_between(x, mean_q - std_q, mean_q + std_q, color='blue', alpha=0.3)
-        plt.plot(x, mean_noq, label='Without quarantine', color='red')
-        plt.fill_between(x, mean_noq - std_noq, mean_noq + std_noq, color='red', alpha=0.3)
-        plt.xlabel('Time')
-        plt.ylabel('# of Infected')
-        plt.title('SIR with Permanent Quarantine')
-        plt.legend()
-        plt.grid(True)
-        plt.show()
+    if plot_data:
+        fig, ax = plt.subplots(figsize=FIGURE_SIZE_LINE)
+        ax.plot(x, mean_q, label='With quarantine', color='blue')
+        ax.fill_between(x, mean_q - std_q, mean_q + std_q, color='blue', alpha=0.3)
+        ax.plot(x, mean_noq, label='Without quarantine', color='red')
+        ax.fill_between(x, mean_noq - std_noq, mean_noq + std_noq, color='red', alpha=0.3)
+        ax.set_xlabel('Time')
+        ax.set_ylabel('# of Infected')
+        ax.set_title('SIR with Permanent Quarantine')
+        ax.legend()
+        ax.grid(True)
+
+        plt.tight_layout()
+        plt.savefig('permanent_quarantine.pdf', bbox_inches='tight')
+        plt.close()
 
     return (x, mean_q, std_q), (x, mean_noq, std_noq)
 
-# Plots all of the following quarantine strategies: no quarantine, constant, normally dist., permanent
 def plot_all_quarantine():
-    # Get data from existing functions
-    constant_quarantine_data = const_quarantines()  # mean_q, std_q
-    data_const = constant_quarantine_data[0]      # mean_q, std_q
-    data_noq = constant_quarantine_data[1]        # mean_noq, std_noq
-    data_normal = normal_dist_quarantines()[0]    # mean_norm, std_norm
-    data_perm = permanent_quarantine()[0]         # mean_q, std_q
+    constant_quarantine_data = const_quarantines()
+    data_const = constant_quarantine_data[0]
+    data_noq = constant_quarantine_data[1]
+    data_normal = normal_dist_quarantines()[0]
+    data_perm = permanent_quarantine()[0]
 
     x = data_noq[0]
 
@@ -628,27 +606,21 @@ def plot_all_quarantine():
 
     colors = ['blue', 'green', 'orange', 'purple']
 
-    plt.rcParams.update({
-        "font.size": 18,
-        "axes.titlesize": 22,
-        "axes.labelsize": 20,
-        "xtick.labelsize": 16,
-        "ytick.labelsize": 16,
-        "legend.fontsize": 16,
-        "lines.linewidth": 2.5,
-    })
+    fig, ax = plt.subplots(figsize=FIGURE_SIZE_LINE)
 
     for i, (label, (mean_vals, std_vals)) in enumerate(results.items()):
-        plt.plot(x, mean_vals, label=label, color=colors[i])
-        plt.fill_between(x, mean_vals - std_vals, mean_vals + std_vals, color=colors[i], alpha=0.3)
+        ax.plot(x, mean_vals, label=label, color=colors[i])
+        ax.fill_between(x, mean_vals - std_vals, mean_vals + std_vals, color=colors[i], alpha=0.3)
 
-    plt.xlabel("Time")
-    plt.ylabel("# of Infected")
-    plt.title("SIR Infections Under Different Quarantine Strategies")
-    plt.legend(frameon=False)
-    plt.grid(True, linestyle='--', alpha=0.5)
+    ax.set_xlabel("Time")
+    ax.set_ylabel("# of Infected")
+    ax.set_title("SIR Infections Under Different Quarantine Strategies")
+    ax.legend(frameon=False)
+    ax.grid(True, linestyle='--', alpha=0.5)
+
     plt.tight_layout()
-    plt.show()
+    plt.savefig('all_quarantine_strategies.pdf', bbox_inches='tight')
+    plt.close()
 
     return results
 
@@ -659,20 +631,16 @@ def run_simulations():
     data3 = r_quarantine()
     data4 = permanent_quarantine()
     data5 = random_vs_nonrandom_seeds(num_comparisons=10)
-    data6 = plot_jaccard_similarity(num_runs=20, bins=10)
+    data6 = jaccard_similarity(num_runs=20, bins=10)
 
     return data0, data1, data2, data3, data4, data5, data6
 
-# Pickle results from the functions
 def SIR_pickle_dump(filename='experiment_data/pickles.pkl'):
-    # We will pickle these parameters along with the results for later reference
     presets = {'T': T, 'Repeat': Repeat, 'beta': beta, 'gamma': gamma, 'mu': mu, 'init': init}
 
-    # Run simulations to collect results
     data = run_simulations()
 
     with open(filename, 'wb') as f:
-        # Clear the file before writing
         f.truncate(0)
         all_data = {
             'SIR Default presets': presets,
@@ -685,21 +653,12 @@ def SIR_pickle_dump(filename='experiment_data/pickles.pkl'):
         }
         pickle.dump(all_data, f)
 
-    print("Data has been pickled successfully.")
-
 def pickle_load(filename='experiment_data/pickles.pkl'):
-    # Open the file in binary read mode
     with open(filename, 'rb') as file:
         data = pickle.load(file)
 
-    # Now `data` holds the deserialized object
     print(data)
 
-# SIR_pickle_dump()
-# random_vs_nonrandom_seeds(3)
-plot_jaccard_similarity()
-# const_quarantines()
-# normal_dist_quarantines()
-# r_quarantine()
-# permanent_quarantine()
 # plot_all_quarantine()
+random_vs_nonrandom_seeds(3, plot_data=True)
+# jaccard_similarity(plot_data=True)

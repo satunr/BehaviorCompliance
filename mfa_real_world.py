@@ -11,12 +11,13 @@ import pickle
 #----------
 #
 #  Same computations as in mean_field_approximation.py, 
-#    but SIR data is from real-world numerical data -> no network structures given
+#    but SIR data is from real-world time series data -> no network structures given
 #
 #----------
 
 #----------
 #
+#  Recall:
 #  Mean-field approximation for SIR model: n_i = beta * <k> (1 - n_r / gamma - r) * n_r / gamma
 #  Assuming n_i, n_r, SIR parameters are known, this gives us the constrained, non-linear optimization problem:
 #    y = w1 * x1 * (x2 - w2), where <w1, w2> are the model weights to be learned (mean node degree, recovered ratio, respectively).

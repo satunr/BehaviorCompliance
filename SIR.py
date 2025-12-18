@@ -163,7 +163,8 @@ def Simulate_SIR(contact_network,social_network,T,Repeat,beta,gamma,mu,init,
             q = True  # Set to true so that we can use the quarantine edge removal function
 
         elif q == "r":
-            # If q is "r", we will restore edges immediately after recovery
+            # If q is "r", we will restore edges immediately after recovery; 
+            # no fixed quarantine period needed
             pass
 
         # By default, quarantine period ~ Normal
