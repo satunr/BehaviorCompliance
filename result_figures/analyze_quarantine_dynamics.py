@@ -67,6 +67,7 @@ for r in range(num_simulations):
 
 # Collection of i_prime curves
 inf_inf_runs = np.array(inf_inf_runs)  # shape: (runs, T_after_q)
+# NOTE: Ensure this is time after quarantine
 T = inf_inf_runs.shape[1]
 
 # Average informed&infected proportion over runs (i_prime)
@@ -105,11 +106,7 @@ for r in range(num_simulations):
     k_q_lst = samples[index]['Dynamic degree']['y']
     k_q_runs.append(k_q_lst)
 
-# Quick debug point
-for r, lst in enumerate(k_q_runs):
-    print(r, len(lst))
-
-k_q_true = np.mean(k_q_runs, axis=0)  # shape: (T,)
+k_q_true_mean = np.mean(k_q_runs, axis=0)  # shape: (T,)
 k_q_true_std = np.std(k_q_runs, axis=0)
 
 # -------------
@@ -118,7 +115,7 @@ k_q_true_std = np.std(k_q_runs, axis=0)
 def mse_loss(params, i_prime_cur):
     S, adherence_val = params
     k_q_est = np.array([k_0 * (1 - S * adherence_val * i_prime_cur[t]) for t in range(len(i_prime))])
-    mse = np.mean((k_q_true - k_q_est) ** 2)
+    mse = np.mean((k_q_true_mean - k_q_est) ** 2)
     return mse
 
 #---------------
@@ -127,39 +124,39 @@ def mse_loss(params, i_prime_cur):
 #
 #---------------
 
-# --- Define ranges for the parameters ---
-S_vals = np.linspace(0, 2, 50)     
-adherence_vals = np.linspace(0, 1, 10)
+# # --- Define ranges for the parameters ---
+# S_vals = np.linspace(0, 2, 50)     
+# adherence_vals = np.linspace(0, 1, 10)
 
-S_grid, A_grid = np.meshgrid(S_vals, adherence_vals)
+# S_grid, A_grid = np.meshgrid(S_vals, adherence_vals)
 
-# --- Compute MSE surface ---
-MSE_grid = np.zeros_like(S_grid)
+# # --- Compute MSE surface ---
+# MSE_grid = np.zeros_like(S_grid)
 
-for i in range(S_grid.shape[0]):
-    for j in range(S_grid.shape[1]):
-        MSE_grid[i, j] = mse_loss(
-            (S_grid[i, j], A_grid[i, j]),
-            i_prime
-        )
+# for i in range(S_grid.shape[0]):
+#     for j in range(S_grid.shape[1]):
+#         MSE_grid[i, j] = mse_loss(
+#             (S_grid[i, j], A_grid[i, j]),
+#             i_prime
+#         )
 
-# --- Plot ---
-fig = plt.figure(figsize=(10, 7))
-ax = fig.add_subplot(111, projection='3d')
+# # --- Plot ---
+# fig = plt.figure(figsize=(10, 7))
+# ax = fig.add_subplot(111, projection='3d')
 
-surf = ax.plot_surface(
-    S_grid, A_grid, MSE_grid,
-    linewidth=0, antialiased=True
-)
+# surf = ax.plot_surface(
+#     S_grid, A_grid, MSE_grid,
+#     linewidth=0, antialiased=True
+# )
 
-ax.set_xlabel("S")
-ax.set_ylabel("adherence")
-ax.set_zlabel("MSE Loss")
+# ax.set_xlabel("S")
+# ax.set_ylabel("adherence")
+# ax.set_zlabel("MSE Loss")
 
-ax.set_title("MSE Loss Surface")
+# ax.set_title("MSE Loss Surface")
 
-fig.colorbar(surf, shrink=0.5, aspect=10)
-plt.show()
+# fig.colorbar(surf, shrink=0.5, aspect=10)
+# plt.show()
 
 #---------------
 #
@@ -218,7 +215,7 @@ k_q_est_std = np.std(k_q_est_runs, axis=0)
 plt.figure(figsize=(10, 6))
 # Shift x values by split_point
 xvals = np.arange(split_point, split_point + T)
-plt.plot(xvals, k_q_true, label=r'True $\langle k_q \rangle$', color='#1f77b4', linewidth=2.5)
+plt.plot(xvals, k_q_true_mean, label=r'True $\langle k_q \rangle$', color='#1f77b4', linewidth=2.5)
 plt.plot(xvals, k_q_est_best, label=r'Estimated $\langle k_q \rangle$ (best params)', color='#ff7f0e', linestyle='--', linewidth=2.5)
 # Plot std band for estimates
 plt.fill_between(xvals,
@@ -227,8 +224,8 @@ plt.fill_between(xvals,
                  color='#ff7f0e', alpha=0.25, label='Estimate ± 1 std (all runs)')
 # Plot std band for true k_q
 plt.fill_between(xvals,
-                    k_q_true - k_q_true_std,
-                    k_q_true + k_q_true_std,
+                    k_q_true_mean - k_q_true_std,
+                    k_q_true_mean + k_q_true_std,
                     color='#1f77b4', alpha=0.2, label='True ± 1 std')
 plt.xlabel('Time (in days)', fontsize=15)
 plt.ylabel(r'$\langle k_q \rangle$', fontsize=15)
@@ -312,7 +309,7 @@ save_dict = {
     "time_after_q": int(T),
     "i_prime_mean": i_prime.tolist(),
     "inf_inf_runs": inf_inf_runs.tolist(),
-    "k_q_true": k_q_true.tolist(),
+    "k_q_true": k_q_true_mean.tolist(),
     "best_S_lst": [float(x) for x in best_S_lst],
     "best_adh_lst": [float(x) for x in best_adh_lst],
     "best_S_mean": best_S,

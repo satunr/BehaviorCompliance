@@ -8,6 +8,7 @@ from scipy.optimize import minimize
 import random
 import os
 import sys
+import pickle as pkl
 
 #----------
 #
@@ -17,11 +18,6 @@ import sys
 #
 #----------
 
-write_file = "experiment_data/mfa_xy_data.txt"
-# Overwrite write_file if provided as command line argument
-if len(sys.argv) > 1:
-    write_file = sys.argv[1]
-
 social_graph = None
 contact_graph = None
 
@@ -29,25 +25,84 @@ contact_graph = None
 n = 200  # number of nodes
 p = 0.05  # probability of edge
 
+load_initial = False  # Set to True if you want to existing epidemic states from pickle file
 clear = False  # Set clear to True if you want to use a new network or clear data files. False if you want to keep the existing one.
 verbose = True  # Set verbose to True if you want to see detailed output during optimization
+mode = None  # "standard" or "adherence" or "YJMOB"
+if len(sys.argv) == 2:
+    mode = "YJMOB"
+elif len(sys.argv) == 3:
+    mode = "adherence"
 
-adherence = 1.0 # Proportion of individuals who sever contact edges upon infection
+file_index = None  # Used for reading from network files, choosing write file names
+# Form: python mean_field_approx.py <file index>
+# Used with YJMOB dataset
+if mode == "YJMOB":
+    file_index = int(sys.argv[1])
+
+    # For initial interval, we do not load previous states
+    # Note: previous states are always saved after each run, and overwrite the existing file
+    if file_index >= 1:
+        load_initial = True
+
+write_file = "experiment_data/mfa_xy_data.txt"
+# Overwrite write_file if provided as command line argument
+
+# Form: python mean_field_approx.py <write_file> <adherence>
+# Used when running multiple simulations with different adherence levels
+if mode == "adherence":
+    write_file = sys.argv[1]
+elif mode == "YJMOB":
+    write_file = f"experiment_data/yjmob{file_index}_runs.txt"
+
+adherence = 0.6 # Proportion of individuals who sever contact edges upon infection
 # Overwrite adherence if provided as command line argument
-if len(sys.argv) > 2:
+if mode == "adherence":
     adherence = float(sys.argv[2])
 
+initial_states = None
+seeds = None
+adhering = None
+if load_initial == True:
+    # Load initial states from pickle file if it exists
+    try:
+        with open("experiment_data/mfa_initial_state.pkl", "rb") as f:
+            unpickled_data = pkl.load(f)
+            # Dictionary of node states
+            initial_states = unpickled_data.get("New Initial States", None)
+            # List of informed individuals
+            seeds = unpickled_data.get("New Informed", None)
+            # Set of adhering individuals
+            adhering = unpickled_data.get("Adhering", None)
+
+    except (FileNotFoundError, OSError, ValueError, pkl.UnpicklingError, EOFError) as e:
+        initial_states = None
+        seeds = None
+        adhering = None
+
 # Simulation parameters
-T = 100
-Repeat = 1
+T = 200
 beta = 0.15  # Infection rate
 gamma = 0.07  # Recovery rate
 mu = 0.10  # Immunity loss rate
 init = 0.15 # Initial infected portion
 q = "r"  # Quarantine type: indiviuals restore edges when recovered
 split_point = 30  # Set to None if you want to optimize over the full SIR simulation, or a specific time point to split the optimization
-seeds = None  # Set to None for random seeds, or a list of node IDs to use as seeds. Ex. [0, 1, 2] for nodes 0, 1, and 2 as seeds
 density_social = None  # Set to None for default density, or an integer number of edges in the social graph
+
+if mode == "YJMOB":
+    T = 15
+    split_point = None
+
+    # Pre-quarantine
+    if file_index <= 1:
+        adherence = 0.0
+    elif file_index == 2:
+        adherence = 0.6
+    # Overwrite with static adhering list past this point,
+    #  as they've been determined in file_index 2 run
+    else:
+        adherence = adhering
 
 # Clear data files
 def truncate_files():
@@ -69,8 +124,14 @@ try:
     if not os.path.exists("experiment_data/mfa_contact.gml") or not os.path.exists("experiment_data/mfa_social.gml"):
         raise FileNotFoundError
 
-    contact_graph = nx.read_gml("experiment_data/mfa_contact.gml")
-    social_graph = nx.read_gml("experiment_data/mfa_social.gml")
+    # Rewrite graphs if mode is YJMOB
+    if mode == "YJMOB":
+        contact_graph = nx.read_gml(f"experiment_data/yjmob_contact{file_index}.gml") 
+        social_graph = nx.read_gml(f"experiment_data/yjmob_social{file_index}.gml")
+    else:
+        # By default, use these
+        contact_graph = nx.read_gml("experiment_data/mfa_contact.gml") 
+        social_graph = nx.read_gml("experiment_data/mfa_social.gml")
 
     # Convert node labels from strings to integers
     contact_graph = nx.relabel_nodes(contact_graph, lambda x: int(x))
@@ -101,18 +162,31 @@ except (FileNotFoundError, OSError, ValueError, nx.NetworkXError) as e:
 SIR_results = SIR.Simulate_SIR(
     contact_network=deepcopy(contact_graph),
     social_network=deepcopy(social_graph),
-    T=T, Repeat=Repeat,
-    beta=beta, gamma=gamma, mu=mu, init=init,
-    q=q, allow_restoration=q, 
-    save_all=True, adherence=adherence, begin_q=split_point, 
-    seeds=seeds
+    T=T, beta=beta, gamma=gamma, mu=mu, init=init,
+    q=q, adherence=adherence, begin_q=split_point, 
+    seeds=seeds, initial_state_dict=initial_states
 )
 
-deg_lst = SIR_results[6]
-dynamic_deg = deepcopy(deg_lst)     # Degree list over time. Will be used when calculating adherence(time) in extract_mfa.py
 true_dynamics = SIR_results[4]
+deg_lst = SIR_results[6]
+dynamic_deg = deepcopy(deg_lst) 
 informed_and_infected = SIR_results[7]
 informed = SIR_results[8]
+adhering = SIR_results[9]
+
+# Write to initial_state.pkl for next run (if applicable)
+new_initial_state_dict = true_dynamics[-1]
+new_informed = informed[-1]
+# Write new initial states to pickle file for future use
+with open("experiment_data/mfa_initial_state.pkl", "wb") as f:
+    f.truncate(0)
+
+    data_to_pickle = {
+        "New Initial States": new_initial_state_dict,
+        "New Informed": new_informed,
+        "Adhering": adhering
+    }
+    pkl.dump(data_to_pickle, f)
 
 def given_at_time(time):
     new_r_ratio = sum(1 for node in contact_graph.nodes() 
@@ -340,18 +414,23 @@ def save_xy_data(dynamic_deg=None, w1_avg=None, w2_avg=None, w1_all_runs=None, s
     with open(write_file, "a") as f:
         f.write("==New Sample==\n")
 
-        f.write("Number of nodes: " + str(n) + "\n\n")
-        f.write("Adhering proportion: " + str(adherence) + "\n\n")
+        f.write("Number of nodes: " + str(contact_graph.number_of_nodes()) + "\n\n")
+
+        if isinstance(adherence, float):
+            f.write("Adhering proportion: " + str(adherence) + "\n\n")
+        # If only given adhering list, compute proportion
+        else:
+            # Round to nearest 0.01
+            adhering_prop = round(len(adhering) / contact_graph.number_of_nodes(), 2)
+            f.write("Adhering proportion: " + str(adhering_prop) + "\n\n")
 
         f.write("SIR Infections:\n")
         f.write(f"x: {','.join(map(str, range(x_ofs, len(sir_infections_y) + x_ofs)))}\n")
         f.write(f"y: {','.join(map(str, sir_infections_y))}\n\n")
 
-        # If split_point is None, degree doesn't change over time (don't save it)
-        if split_point is not None:
-            f.write("Dynamic degree:\n")
-            f.write(f"x: {','.join(map(str, range(x_ofs, len(dynamic_deg) + x_ofs)))}\n")
-            f.write(f"y: {','.join(map(str, dynamic_deg))}\n\n")
+        f.write("Dynamic degree:\n")
+        f.write(f"x: {','.join(map(str, range(x_ofs, len(dynamic_deg) + x_ofs)))}\n")
+        f.write(f"y: {','.join(map(str, dynamic_deg))}\n\n")
 
         f.write("w1 True (Mean Node Degree):\n")
         f.write(f"x: {','.join(map(str, range(x_ofs, len(w1_true_y) + x_ofs)))}\n")
@@ -389,7 +468,7 @@ def save_xy_data(dynamic_deg=None, w1_avg=None, w2_avg=None, w1_all_runs=None, s
 
 if split_point is None:
     w1_run_avg, w2_run_avg, w1_all_runs = drive_optimizer(split_point=None)
-    save_xy_data(w1_avg=w1_run_avg, w2_avg=w2_run_avg, w1_all_runs=w1_all_runs)
+    save_xy_data(dynamic_deg=dynamic_deg, w1_avg=w1_run_avg, w2_avg=w2_run_avg, w1_all_runs=w1_all_runs)
 else:
     w1_avg1, w2_avg1, w1_avg2, w2_avg2, w1_all_runs1, w1_all_runs2 = drive_optimizer(split_point=split_point)
     save_xy_data(dynamic_deg=dynamic_deg, w1_avg=w1_avg1, w2_avg=w2_avg1, w1_all_runs=w1_all_runs1, split=(split_point, 1))

@@ -2,11 +2,11 @@ import re
 import ast
 import re
 
-#----------
+#------------
 #
-#  Parse data written by mean_field_approx.py to experiment_data/mfa_xy_data.txt
+#  Parse data written by mean_field_approx.py
 #
-#----------
+#------------
 
 def parse_sample_data(filename):
     # Parse the MFA data file into a list of samples.
@@ -107,84 +107,3 @@ def parse_sample_data(filename):
             samples.append(current_sample)
 
     return samples
-
-# Plot description: mfa_xy should have many of 1 config, many of another (split = False in mean_field_approx.py), 
-#   and this will plot the SIR curves and w1 True vs Estimated for each half (set of samples).
-def plot_halves(samples):
-    from itertools import cycle
-    import matplotlib.pyplot as plt
-
-    n_samples = len(samples)
-    mid_point = (n_samples + 1) // 2
-    first_half = samples[:mid_point]
-    second_half = samples[mid_point:]
-
-    colors = cycle(['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'])
-
-    # Plot first half
-    if first_half:
-        # SIR infections
-        plt.figure(figsize=(10, 6))
-        for i, sample in enumerate(first_half, 1):
-            color = next(colors)
-            plt.plot(sample['SIR Infections']['x'], sample['SIR Infections']['y'],
-                     label=f'Sample {i}', color=color)
-        plt.xlabel('Time')
-        plt.ylabel('SIR Infections')
-        plt.title('First Half: SIR Infections')
-        plt.grid(True)
-        plt.legend()
-        plt.show()
-
-        colors = cycle(['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'])
-
-        # w1 True and Estimated
-        plt.figure(figsize=(10, 6))
-        for i, sample in enumerate(first_half, 1):
-            color = next(colors)
-            if 'w1 True (Mean Node Degree)' in sample:
-                plt.plot(sample['w1 True (Mean Node Degree)']['x'], sample['w1 True (Mean Node Degree)']['y'],
-                         label=f'Sample {i} w1 True', color=color, linestyle='-')
-            plt.plot(sample['w1 Estimated']['x'], sample['w1 Estimated']['y'],
-                     label=f'Sample {i} w1 Estimated', color=color, linestyle='--')
-        plt.xlabel('Time')
-        plt.ylabel('Mean Node Degree')
-        plt.title('First Half: w1 True vs Estimated')
-        plt.grid(True)
-        plt.legend()
-        plt.show()
-
-    # Plot second half
-    colors = cycle(['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'])
-
-    if second_half:
-        # SIR infections
-        plt.figure(figsize=(10, 6))
-        for i, sample in enumerate(second_half, mid_point + 1):
-            color = next(colors)
-            plt.plot(sample['SIR Infections']['x'], sample['SIR Infections']['y'],
-                     label=f'Sample {i}', color=color)
-        plt.xlabel('Time')
-        plt.ylabel('SIR Infections')
-        plt.title('Second Half: SIR Infections')
-        plt.grid(True)
-        plt.legend()
-        plt.show()
-
-        colors = cycle(['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd'])
-
-        # w1 True and Estimated
-        plt.figure(figsize=(10, 6))
-        for i, sample in enumerate(second_half, mid_point + 1):
-            color = next(colors)
-            if 'w1 True (Mean Node Degree)' in sample:
-                plt.plot(sample['w1 True (Mean Node Degree)']['x'], sample['w1 True (Mean Node Degree)']['y'],
-                         label=f'Sample {i} w1 True', color=color, linestyle='-')
-            plt.plot(sample['w1 Estimated']['x'], sample['w1 Estimated']['y'],
-                     label=f'Sample {i} w1 Estimated', color=color, linestyle='--')
-        plt.xlabel('Time')
-        plt.ylabel('Mean Node Degree')
-        plt.title('Second Half: w1 True vs Estimated')
-        plt.grid(True)
-        plt.legend()
-        plt.show()

@@ -3,82 +3,91 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pickle
 
-# -------------------------------------------
-# Save file name
-# -------------------------------------------
+# ============================================================
+# Global matplotlib settings
+# ============================================================
+
+plt.rcParams.update({
+    "font.size": 18,
+    "axes.titlesize": 22,
+    "axes.labelsize": 20,
+    "xtick.labelsize": 16,
+    "ytick.labelsize": 16,
+    "legend.fontsize": 16,
+    "lines.linewidth": 2.5,
+})
+
+# ============================================================
+# Output files
+# ============================================================
+
 PKL_FILENAME = "result_figures/plot_infected_informed_data.pkl"
 
-# -------------------------------------------
-# Adherence files
-# -------------------------------------------
+FIG_GROUPED_PDF = "experiment_data/quarantine_dynamics_by_adherence.pdf"
+FIG_SINGLE_PDF  = "experiment_data/joint_informed_infected_dynamics.pdf"
+
+# ============================================================
+# Adherence data locations
+# ============================================================
+
 ADHERENCE_FILES = {
-    0.0: "experiment_data/a_0.0",
     0.2: "experiment_data/a_0.2",
-    0.5: "experiment_data/a_0.5",
+    0.4: "experiment_data/a_0.4",
     0.6: "experiment_data/a_0.6",
-    0.7: "experiment_data/a_0.7",
+    0.8: "experiment_data/a_0.8",
+    0.9: "experiment_data/a_0.9",
     1.0: "experiment_data/a_1.0",
 }
 
-# -------------------------------------------
-# Plot grouped adherence curves with std bands
-# -------------------------------------------
-def plot_groups_by_adherence():
+# ============================================================
+# Grouped adherence plot
+# ============================================================
+
+def plot_groups_by_adherence(show=False):
 
     colors = {
-        0.0: '#1f77b4',
-        0.2: '#ff7f0e',
-        0.5: '#2ca02c',
-        0.6: '#d62728',
-        0.7: '#9467bd',
-        1.0: '#8c564b',
+        0.2: '#1f77b4',
+        0.4: '#ff7f0e',
+        0.6: '#2ca02c',
+        0.8: '#d62728',
+        0.9: '#9467bd',
+        1.0: '#127b8f',
     }
 
     styles = {
-        'Infected':            ('solid',  2.5),
-        'Informed & Infected': ('dashed', 2.2),
-        'Informed':            ('dotted', 2.5)
+        'Infected':            'solid',
+        'Informed & Infected': 'dashed',
+        'Informed':            'dotted'
     }
 
-    plt.figure(figsize=(14, 8))
-
+    fig, ax = plt.subplots(figsize=(14, 8))
     saved_output = {"grouped_results": {}}
+
     legend_handles = []
     legend_labels = []
 
     for a, filepath in ADHERENCE_FILES.items():
 
         samples = extract_mfa.parse_sample_data(filepath)
-
-        # --- odd indexed samples only ---
         samples = [samples[i] for i in range(len(samples)) if i % 2 == 1]
 
-        if len(samples) == 0:
-            print(f"No usable samples for adherence = {a}")
+        if not samples:
             continue
 
         n = samples[0]['Number of nodes']
         T = len(samples[0]['SIR Infections']['y'])
-        t = np.arange(T)
+        split_point = int(samples[0]['Informed']['x'][0])
 
-        # --- collect curves ---
-        infected_arr = np.vstack(
-            [s['SIR Infections']['y'] for s in samples]
-        ) / n
+        t = split_point + np.arange(T)
 
-        informed_arr = np.vstack(
-            [s['Informed']['y'] for s in samples]
-        ) / n
+        infected_arr = np.vstack([s['SIR Infections']['y'] for s in samples]) / n
+        informed_arr = np.vstack([s['Informed']['y'] for s in samples]) / n
+        inf_inf_arr  = np.vstack([s['Informed and Infected']['y'] for s in samples]) / n
 
-        inf_inf_arr = np.vstack(
-            [s['Informed and Infected']['y'] for s in samples]
-        ) / n
-
-        # --- mean + std ---
         curves = {
-            'Infected': (infected_arr.mean(axis=0), infected_arr.std(axis=0)),
-            'Informed': (informed_arr.mean(axis=0), informed_arr.std(axis=0)),
-            'Informed & Infected': (inf_inf_arr.mean(axis=0), inf_inf_arr.std(axis=0)),
+            'Infected': (infected_arr.mean(0), infected_arr.std(0)),
+            'Informed': (informed_arr.mean(0), informed_arr.std(0)),
+            'Informed & Infected': (inf_inf_arr.mean(0), inf_inf_arr.std(0)),
         }
 
         saved_output["grouped_results"][a] = {
@@ -86,260 +95,153 @@ def plot_groups_by_adherence():
             "time": t.tolist()
         }
 
-        # --- plotting ---
         for name, (mean, std) in curves.items():
-            linestyle, lw = styles[name]
 
-            line = plt.plot(
-                t,
-                mean,
+            line, = ax.plot(
+                t, mean,
                 color=colors[a],
-                linestyle=linestyle,
-                linewidth=lw,
-                label=f'{name} (a = {a})'
-            )[0]
+                linestyle=styles[name],
+                label=f"{name} (a={a})"
+            )
 
-            plt.fill_between(
-                t,
-                mean - std,
+            ax.fill_between(
+                t, mean - std,
                 mean + std,
                 color=colors[a],
                 alpha=0.18
             )
 
             legend_handles.append(line)
-            legend_labels.append(f'{name} (a = {a})')
+            legend_labels.append(f"{name} (a={a})")
 
-            saved_output["grouped_results"][a][f"{name}_mean"] = mean.tolist()
-            saved_output["grouped_results"][a][f"{name}_std"] = std.tolist()
+            # saved_output["grouped_results"][a][f"{name}_mean"] = mean.tolist()
+            # saved_output["grouped_results"][a][f"{name}_std"]  = std.tolist()
 
-    plt.xlabel('Time Step', fontsize=13)
-    plt.ylabel('Fraction of Population', fontsize=13)
-    plt.title('Quarantine Dynamics by Adherence Level', fontsize=15)
+    ax.set_xlabel("Time step")
+    ax.set_ylabel("Fraction of population")
+    ax.set_title("Quarantine dynamics by adherence level")
+    ax.set_ylim(0, 1.02)
+    ax.grid(alpha=0.3)
 
-    plt.grid(True, alpha=0.3)
-    plt.ylim(0, 1.02)
+    # ax.legend(
+    #     handles=legend_handles,
+    #     labels=legend_labels,
+    #     ncol=3,
+    #     loc="lower center",
+    #     bbox_to_anchor=(0.5, -0.28),
+    #     frameon=True
+    # )
 
-    plt.legend(
-        handles=legend_handles,
-        labels=legend_labels,
-        ncol=3,
-        fontsize=10.5,
-        loc='lower center',
-        bbox_to_anchor=(0.5, -0.25),
-        frameon=True,
-        fancybox=True,
-        shadow=True
-    )
+    fig.tight_layout()
+    fig.savefig(FIG_GROUPED_PDF, format="pdf", bbox_inches="tight")
+    plt.close(fig)
 
-    plt.tight_layout()
-    plt.subplots_adjust(bottom=0.30)
-    plt.show()
-
-    # --- Save to PKL ---
     with open(PKL_FILENAME, "wb") as f:
         pickle.dump(saved_output, f)
 
-    print(f"Saved grouped adherence curves → {PKL_FILENAME}")
+    if show:
+        plt.show()
 
-# -------------------------------------------
-# Plot single-adherence dynamics (two y-axes)
-# -------------------------------------------
-def plot_one_adherence_group(samples):
+    print(f"Saved grouped adherence figure → {FIG_GROUPED_PDF}")
 
-    if len(samples) == 0:
-        print("No samples provided.")
+# ============================================================
+# Single adherence plot
+# ============================================================
+
+def plot_one_adherence_group(samples, show=False):
+
+    if not samples:
         return
 
     n = samples[0]['Number of nodes']
     T = len(samples[0]['SIR Infections']['y'])
-    t = np.arange(T)
+    split_point = int(samples[0]['Informed']['x'][0])
+    t = split_point + np.arange(T)
 
-    infected_arr = np.vstack(
-        [s['SIR Infections']['y'] for s in samples]
-    ) / n
+    infected_arr = np.vstack([s['SIR Infections']['y'] for s in samples]) / n
+    informed_arr = np.vstack([s['Informed']['y'] for s in samples]) / n
+    inf_inf_arr  = np.vstack([s['Informed and Infected']['y'] for s in samples]) / n
 
-    informed_arr = np.vstack(
-        [s['Informed']['y'] for s in samples]
-    ) / n
+    fig, ax = plt.subplots(figsize=(13, 8))
 
-    inf_inf_arr = np.vstack(
-        [s['Informed and Infected']['y'] for s in samples]
-    ) / n
+    # Title
+    ax.set_title(f"Quarantine Dynamics Under Full Adherence")
 
-    infected_mean = infected_arr.mean(axis=0)
-    informed_mean = informed_arr.mean(axis=0)
-    inf_inf_mean = inf_inf_arr.mean(axis=0)
+    def plot_band(mean, std, label, color):
+        ax.plot(t, mean, label=label, color=color)
+        ax.fill_between(t, mean - std, mean + std, color=color, alpha=0.22)
 
-    infected_std = infected_arr.std(axis=0)
-    informed_std = informed_arr.std(axis=0)
-    inf_inf_std = inf_inf_arr.std(axis=0)
+    # plot_band(informed_arr.mean(0), informed_arr.std(0), "Informed", "#2ca02c")
+    # plot_band(inf_inf_arr.mean(0), inf_inf_arr.std(0), "Informed & Infected", "#ff7f0e")
+    # plot_band(infected_arr.mean(0), infected_arr.std(0), "Infected", "#d62728")
 
-    plt.figure(figsize=(13, 8))
-    plt.title(
-        "Joint Evolution of Informed and SIRS Epidemic Model",
-        fontsize=20,
-        pad=20
-    )
+    ax.set_xlabel("Time")
+    ax.set_ylabel("Fraction of population")
+    ax.set_ylim(0, 1.02)
+    ax.grid(alpha=0.3)
 
-    def plot_with_band(mean, std, label, color):
-        plt.plot(t, mean, color=color, linewidth=3.0, label=label)
-        plt.fill_between(t, mean - std, mean + std, color=color, alpha=0.22)
+    # ax.legend(
+    #     loc="upper center",
+    #     bbox_to_anchor=(0.5, -0.12),
+    #     ncol=3,
+    #     frameon=True
+    # )
 
-    plot_with_band(informed_mean, informed_std, "Informed", "#2ca02c")
-    plot_with_band(inf_inf_mean, inf_inf_std, "Informed & Infected", "#ff7f0e")
-    plot_with_band(infected_mean, infected_std, "Infected", "#d62728")
+    fig.tight_layout()
+    fig.savefig(FIG_SINGLE_PDF, format="pdf", bbox_inches="tight")
+    plt.close(fig)
 
-    plt.xlabel("Time (in days)", fontsize=18)
-    plt.ylabel("Fraction of Population", fontsize=18)
+    if show:
+        plt.show()
 
-    plt.xticks(fontsize=16)
-    plt.yticks(fontsize=16)
-    plt.ylim(0, 1.02)
-    plt.grid(True, alpha=0.3)
+    print(f"Saved single adherence figure → {FIG_SINGLE_PDF}")
 
-    plt.legend(
-        loc="upper center",
-        bbox_to_anchor=(0.5, -0.12),
-        ncol=3,
-        frameon=True,
-        fontsize=15,
-    )
-
-    plt.tight_layout()
-    plt.show()
-
-    # --- Save results to PKL ---
-    with open(PKL_FILENAME, "rb") as f:
-        data = pickle.load(f)
-
-    data["single_adherence_group"] = {
-        "n": n,
-        "time": t.tolist(),
-        "infected_mean": infected_mean.tolist(),
-        "infected_std": infected_std.tolist(),
-        "informed_mean": informed_mean.tolist(),
-        "informed_std": informed_std.tolist(),
-        "inf_and_inf_mean": inf_inf_mean.tolist(),
-        "inf_and_inf_std": inf_inf_std.tolist(),
-    }
-
-    with open(PKL_FILENAME, "wb") as f:
-        pickle.dump(data, f)
-
-# -------------------------------------------
-# Example usage
-# -------------------------------------------
-
-# Plot grouped adherence curves
-plot_groups_by_adherence()
-
-# Plot single-adherence group if desired
-# samples = extract_mfa.parse_sample_data("experiment_data/a_0.5")
-# samples = [samples[i] for i in range(len(samples)) if i % 2 == 1]
-# plot_one_adherence_group(samples)
-
-
-# -----------------------
-#
-#  Compute pairwise L^2 distances between 'Informed & Infected' curves
-#    to see if there's confusion between adherence levels in our approximation for <k_q>
-#
-#------------------------
-
-PKL_FILENAME = "result_figures/plot_infected_informed_data.pkl"
+# ============================================================
+# Pairwise standardized L2 distances
+# ============================================================
 
 def compute_pairwise_L2_informed_infected():
-    """
-    Compute pairwise standardized L^2 distances between
-    'Informed & Infected' curves for each adherence level.
-    """
 
     with open(PKL_FILENAME, "rb") as f:
         data = pickle.load(f)
 
     grouped = data["grouped_results"]
-
     adherence_levels = sorted(grouped.keys())
     k = len(adherence_levels)
 
-    # --- extract curves ---
-    means = {}
-    stds = {}
+    means = {a: np.array(grouped[a]["Informed & Infected_mean"]) for a in adherence_levels}
+    stds  = {a: np.array(grouped[a]["Informed & Infected_std"])  for a in adherence_levels}
 
-    for a in adherence_levels:
-        means[a] = np.array(grouped[a]["Informed & Infected_mean"])
-        stds[a]  = np.array(grouped[a]["Informed & Infected_std"])
-
-    # --- distance matrix ---
     D = np.zeros((k, k))
 
-    for i, a_i in enumerate(adherence_levels):
-        for j, a_j in enumerate(adherence_levels):
+    for i, ai in enumerate(adherence_levels):
+        for j, aj in enumerate(adherence_levels):
 
             if i == j:
                 continue
 
-            mu_i = means[a_i]
-            mu_j = means[a_j]
+            pooled = np.sqrt(stds[ai]**2 + stds[aj]**2)
+            valid = pooled > 0
 
-            sigma_i = stds[a_i]
-            sigma_j = stds[a_j]
-
-            pooled_std = np.sqrt(sigma_i**2 + sigma_j**2)
-
-            # avoid divide-by-zero
-            valid = pooled_std > 0
-
-            z = np.zeros_like(mu_i)
-            z[valid] = (mu_i[valid] - mu_j[valid]) / pooled_std[valid]
+            z = np.zeros_like(means[ai])
+            z[valid] = (means[ai][valid] - means[aj][valid]) / pooled[valid]
 
             D[i, j] = np.sqrt(np.mean(z**2))
 
     return adherence_levels, D
 
-levels, D = compute_pairwise_L2_informed_infected()
+# if __name__ == "__main__":
+    # read_file = "experiment_data/a_1.0"
+    # samples = extract_mfa.parse_sample_data(read_file)
+    # samples = [samples[i] for i in range(len(samples)) if i % 2 == 1]
+    
+    # # Shorten every sample to first 70 time steps
+    # for sample in samples:
+    #     for key in sample:
+    #         if isinstance(sample[key], dict) and 'y' in sample[key]:
+    #             sample[key]['y'] = sample[key]['y'][:70]
+    #             sample[key]['x'] = sample[key]['x'][:70]
 
-print("Adherence levels:", levels)
-print("Pairwise standardized L2 matrix:")
-print(np.round(D, 3))
+    # plot_one_adherence_group(samples, show=True)
 
-from sklearn.linear_model import LinearRegression
-
-def compute_curve_nonlinearity(curves):
-    """
-    curves: 2D array of shape (num_samples, T)
-    Returns: array of nonlinearity values for each sample
-    """
-    T = curves.shape[1]
-    t = np.arange(T).reshape(-1, 1)
-
-    nonlinearity = []
-    for y in curves:
-        model = LinearRegression().fit(t, y)
-        y_pred = model.predict(t)
-        resid = y - y_pred
-        nonlinearity.append(np.sqrt(np.mean(resid**2)))  # RMS residual
-    return np.array(nonlinearity)
-
-# Store results per adherence level
-dynamic_degree_nonlinearity = {}
-
-for a, filepath in ADHERENCE_FILES.items():
-    samples = extract_mfa.parse_sample_data(filepath)
-    samples = [samples[i] for i in range(len(samples)) if i % 2 == 1]
-
-    if len(samples) == 0:
-        print(f"No usable samples for adherence = {a}")
-        continue
-
-    # Stack Dynamic degree curves
-    kq_arr = np.vstack([s['Dynamic degree']['y'] for s in samples])
-
-    # Compute nonlinearity per sample and average
-    nl = compute_curve_nonlinearity(kq_arr)
-    dynamic_degree_nonlinearity[a] = np.mean(nl)
-
-# Print results
-for a, nl in dynamic_degree_nonlinearity.items():
-    print(f"Adherence {a:.1f}: Nonlinearity = {nl:.3f}")
+    # plot_groups_by_adherence(show=True)

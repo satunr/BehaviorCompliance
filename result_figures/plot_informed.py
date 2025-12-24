@@ -57,5 +57,5 @@ ax.legend()
 ax.grid(True, alpha=0.3)
 
 plt.tight_layout()
-plt.savefig('proportion_informed.pdf', bbox_inches='tight')
+plt.savefig('experiment_data/proportion_informed.pdf', bbox_inches='tight')
 plt.close()

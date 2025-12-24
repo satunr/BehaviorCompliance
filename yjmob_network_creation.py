@@ -1,9 +1,8 @@
-import pandas as pd
-import gzip
-from collections import deque
 import networkx as nx
 import py4cytoscape as p4c
 import numpy as np
+
+ping_cytoscape = True
 
 # Sampled from YJMob100k dataset #2
 file_path = "experiment_data/yjmob_sample.csv"
@@ -64,9 +63,6 @@ for interval_key, interval in day_data_initial.items():
 contact_networks = []
 social_networks = []
 
-print(day_data_final.keys())
-print("Is every interval having the same exact data?", day_data_final[0] == day_data_final[1])
-
 for interval_key, interval_data in day_data_final.items():
     collision_data = {}
 
@@ -106,11 +102,19 @@ for interval_key, interval_data in day_data_final.items():
                         else:
                             collision_data[edge] += 1
 
+    #---------------
+    # Contact network creation
+    #---------------
+
     # Create an undirected contact network from collision data
     contact_network = nx.Graph()
     for edge in collision_data.keys():
         contact_network.add_edge(edge[0], edge[1])
 
+    #---------------
+    # Social network creation based on collision frequency
+    #---------------
+    
     # Compute the 75th percentile of the collision count distribution
     collision_counts = np.array(list(collision_data.values()))
     percentile_75 = np.percentile(collision_counts, 75)
@@ -126,22 +130,51 @@ for interval_key, interval_data in day_data_final.items():
         if node not in social_network:
             social_network.add_node(node)
 
-    # Rename nodes to be sequential integers starting from 0
-    nodes = sorted(contact_network.nodes())
-    mapping = {old_label: i for i, old_label in enumerate(nodes)}
-    contact_network = nx.relabel_nodes(contact_network, mapping)
-    social_network = nx.relabel_nodes(social_network, mapping)
-
     # Make the social network directed
     social_network = social_network.to_directed()
 
-    # Import the networks into Cytoscape for visualization
-    p4c.create_network_from_networkx(contact_network, title=f"YJMob Contact Network {interval_key}", collection="YJMob Networks")
-    p4c.create_network_from_networkx(social_network, title=f"YJMob Social Network {interval_key}", collection="YJMob Networks")
-
-    # Save networks to GML files to use in MFA
-    nx.write_gml(contact_network, "experiment_data/mfa_contact.gml")
-    nx.write_gml(social_network, "experiment_data/mfa_social.gml")
-
     contact_networks.append(contact_network)
     social_networks.append(social_network)
+
+# Ensure all networks have the same nodes
+# Find the union of all nodes across all intervals
+all_nodes = set()
+for contact_network in contact_networks:
+    all_nodes.update(contact_network.nodes())
+
+# Add missing nodes to each interval's social and contact networks
+for i in range(len(contact_networks)):
+    contact_network = contact_networks[i]
+    social_network = social_networks[i]
+    for node in all_nodes:
+        if node not in contact_network:
+            contact_network.add_node(node)
+        if node not in social_network:
+            social_network.add_node(node)
+
+# Create a single consistent mapping: original user_id -> consecutive integer 0,1,2,...
+all_nodes = sorted(all_nodes)
+mapping = {old_label: new_id for new_id, old_label in enumerate(all_nodes)}
+
+# Apply the SAME mapping to ALL contact and social networks, updating the lists
+for i in range(len(contact_networks)):
+    contact_networks[i] = nx.relabel_nodes(contact_networks[i], mapping)
+    social_networks[i] = nx.relabel_nodes(social_networks[i], mapping)
+
+# Now save the relabeled graphs
+for interval_key in day_data_final.keys():  # Use actual interval keys for naming
+    # Find the index corresponding to this interval_key
+    i = list(day_data_final.keys()).index(interval_key)
+    contact_network = contact_networks[i]
+    social_network = social_networks[i]
+
+    if ping_cytoscape:
+        cyto_social = nx.to_undirected(social_network)
+        # Relabel social network nodes to (len(all_nodes) + original_id) to avoid overlap
+        cyto_social = nx.relabel_nodes(cyto_social, {old_label: len(all_nodes) + old_label for old_label in cyto_social.nodes()})
+        union_network = nx.union(contact_network, cyto_social)
+
+        p4c.create_network_from_networkx(union_network, title=f"YJMob Networks {interval_key}", collection="YJMob Networks")
+
+    nx.write_gml(contact_network, f"experiment_data/yjmob_contact{interval_key}.gml")
+    nx.write_gml(social_network, f"experiment_data/yjmob_social{interval_key}.gml")

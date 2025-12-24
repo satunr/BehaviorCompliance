@@ -81,7 +81,7 @@ if ping_cytoscape == True:
     p4c.create_network_from_networkx(social_graph, collection="My NetworkX Graph", title="Initial Social")
 
 # The tuple (G, state) is stored in state_tuple variable
-state_tuple = SIR.Simulate_SIR(social_network=social_graph,contact_network=contact_graph,T=T,Repeat=Repeat,beta=beta,
+state_tuple = SIR.Simulate_SIR(social_network=social_graph,contact_network=contact_graph,T=T,beta=beta,
                                gamma=gamma,mu=mu,init=init,average_data=False,q=q)
 contact_graph = state_tuple[0]
 infection_statuses = state_tuple[1] # Giving these variables their own names for simplicity
