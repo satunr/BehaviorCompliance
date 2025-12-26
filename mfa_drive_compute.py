@@ -1,7 +1,6 @@
 # Use this file to run the mean field approximation several times
 import subprocess
 import sys
-import matplotlib.pyplot as plt
 
 repeat = 25  # Number of times to run the MFA
 

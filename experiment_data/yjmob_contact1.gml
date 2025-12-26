@@ -1173,11 +1173,11 @@ graph [
   ]
   node [
     id 293
-    label "199"
+    label "184"
   ]
   node [
     id 294
-    label "184"
+    label "180"
   ]
   node [
     id 295
@@ -1185,11 +1185,11 @@ graph [
   ]
   node [
     id 296
-    label "30"
+    label "199"
   ]
   node [
     id 297
-    label "180"
+    label "30"
   ]
   edge [
     source 0

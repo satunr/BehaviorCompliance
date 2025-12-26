@@ -1141,7 +1141,7 @@ graph [
   ]
   node [
     id 285
-    label "158"
+    label "176"
   ]
   node [
     id 286
@@ -1149,11 +1149,11 @@ graph [
   ]
   node [
     id 287
-    label "25"
+    label "268"
   ]
   node [
     id 288
-    label "280"
+    label "25"
   ]
   node [
     id 289
@@ -1161,11 +1161,11 @@ graph [
   ]
   node [
     id 290
-    label "102"
+    label "110"
   ]
   node [
     id 291
-    label "192"
+    label "102"
   ]
   node [
     id 292
@@ -1173,23 +1173,23 @@ graph [
   ]
   node [
     id 293
-    label "2"
+    label "192"
   ]
   node [
     id 294
-    label "268"
+    label "280"
   ]
   node [
     id 295
-    label "0"
+    label "2"
   ]
   node [
     id 296
-    label "176"
+    label "0"
   ]
   node [
     id 297
-    label "110"
+    label "158"
   ]
   edge [
     source 0

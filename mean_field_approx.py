@@ -127,21 +127,28 @@ try:
     # Rewrite graphs if mode is YJMOB
     if mode == "YJMOB":
         contact_graph = nx.read_gml(f"experiment_data/yjmob_contact{file_index}.gml") 
-        social_graph = nx.read_gml(f"experiment_data/yjmob_social{file_index}.gml")
+        social_graph = nx.read_gml(f"experiment_data/yjmob_social.gml")
+
+        # Find initial seed set only for the first post-quarantine interval
+        if file_index == 2:
+            seeds = find_seeds.find_seed_set(contact_graph, 10, 2)
+            # Convert from numpy string array to list of integers
+            seeds = [int(x) for x in seeds]
+
     else:
         # By default, use these
         contact_graph = nx.read_gml("experiment_data/mfa_contact.gml") 
         social_graph = nx.read_gml("experiment_data/mfa_social.gml")
 
+        # Find seed set so we have less variability in the simulation
+        seeds = find_seeds.find_seed_set(contact_graph, 10, 2) if seeds is None else seeds
+
+        # Write seeds to mfa_seeds.npy
+        np.save("experiment_data/mfa_seeds.npy", np.array(seeds))
+
     # Convert node labels from strings to integers
     contact_graph = nx.relabel_nodes(contact_graph, lambda x: int(x))
     social_graph = nx.relabel_nodes(social_graph, lambda x: int(x))
-
-    # Find seed set so we have less variability in the simulation
-    seeds = find_seeds.find_seed_set(contact_graph, 10, 2) if seeds is None else seeds
-
-    # Write seeds to mfa_seeds.npy
-    np.save("experiment_data/mfa_seeds.npy", np.array(seeds))
 
 except (FileNotFoundError, OSError, ValueError, nx.NetworkXError) as e:
     print("No valid graphs found in mfa_*.gml. Generating new graphs.")

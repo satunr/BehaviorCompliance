@@ -1129,43 +1129,43 @@ graph [
   ]
   node [
     id 282
-    label "158"
+    label "183"
   ]
   node [
     id 283
-    label "270"
+    label "184"
   ]
   node [
     id 284
-    label "213"
-  ]
-  node [
-    id 285
-    label "135"
-  ]
-  node [
-    id 286
-    label "46"
-  ]
-  node [
-    id 287
     label "92"
   ]
   node [
-    id 288
-    label "166"
+    id 285
+    label "285"
   ]
   node [
-    id 289
+    id 286
+    label "135"
+  ]
+  node [
+    id 287
+    label "81"
+  ]
+  node [
+    id 288
     label "280"
   ]
   node [
+    id 289
+    label "139"
+  ]
+  node [
     id 290
-    label "241"
+    label "46"
   ]
   node [
     id 291
-    label "139"
+    label "270"
   ]
   node [
     id 292
@@ -1173,23 +1173,23 @@ graph [
   ]
   node [
     id 293
-    label "183"
+    label "213"
   ]
   node [
     id 294
-    label "184"
+    label "241"
   ]
   node [
     id 295
-    label "81"
+    label "30"
   ]
   node [
     id 296
-    label "285"
+    label "166"
   ]
   node [
     id 297
-    label "30"
+    label "158"
   ]
   edge [
     source 0

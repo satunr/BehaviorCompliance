@@ -61,7 +61,7 @@ for interval_key, interval in day_data_initial.items():
 #   A collision is defined as two users being in the same (x_coord, y_coord) within a 2 time unit window
 # Collisions stored as {(user1, user2): count}
 contact_networks = []
-social_networks = []
+all_collisions = {}
 
 for interval_key, interval_data in day_data_final.items():
     collision_data = {}
@@ -97,10 +97,16 @@ for interval_key, interval_data in day_data_final.items():
                     if distance(cur_coord, other_coord) == 0 or distance(next_coord, other_coord) == 0:
                         # Record collision
                         edge = tuple(sorted((userID, other_userID)))
+                        # Record collision in local collision data
                         if edge not in collision_data:
                             collision_data[edge] = 1
                         else:
                             collision_data[edge] += 1
+                        # Record collision in global collision data
+                        if edge not in all_collisions:
+                            all_collisions[edge] = 1
+                        else:
+                            all_collisions[edge] += 1
 
     #---------------
     # Contact network creation
@@ -111,32 +117,28 @@ for interval_key, interval_data in day_data_final.items():
     for edge in collision_data.keys():
         contact_network.add_edge(edge[0], edge[1])
 
-    #---------------
-    # Social network creation based on collision frequency
-    #---------------
-    
-    # Compute the 75th percentile of the collision count distribution
-    collision_counts = np.array(list(collision_data.values()))
-    percentile_75 = np.percentile(collision_counts, 75)
-
-    # Create social network from collision data: continue adding edges until entire graph is connected
-    social_network = nx.Graph()
-    for edge, count in collision_data.items():
-        if count >= percentile_75:
-            social_network.add_edge(edge[0], edge[1])
-
-    # Add any missing nodes from contact network to social network
-    for node in contact_network.nodes():
-        if node not in social_network:
-            social_network.add_node(node)
-
-    # Make the social network directed
-    social_network = social_network.to_directed()
-
     contact_networks.append(contact_network)
-    social_networks.append(social_network)
 
+#---------------
+# Social network creation based on global collision frequency
+#---------------
+
+# Compute the 75th percentile of the collision count distribution
+collision_counts = np.array(list(all_collisions.values()))
+percentile_75 = np.percentile(collision_counts, 75)
+
+social_network = nx.Graph()
+for edge, count in all_collisions.items():
+    if count >= percentile_75:
+        social_network.add_edge(edge[0], edge[1])
+
+# Make the social network directed
+social_network = social_network.to_directed()
+
+#---------------
 # Ensure all networks have the same nodes
+#---------------
+
 # Find the union of all nodes across all intervals
 all_nodes = set()
 for contact_network in contact_networks:
@@ -145,7 +147,6 @@ for contact_network in contact_networks:
 # Add missing nodes to each interval's social and contact networks
 for i in range(len(contact_networks)):
     contact_network = contact_networks[i]
-    social_network = social_networks[i]
     for node in all_nodes:
         if node not in contact_network:
             contact_network.add_node(node)
@@ -159,14 +160,14 @@ mapping = {old_label: new_id for new_id, old_label in enumerate(all_nodes)}
 # Apply the SAME mapping to ALL contact and social networks, updating the lists
 for i in range(len(contact_networks)):
     contact_networks[i] = nx.relabel_nodes(contact_networks[i], mapping)
-    social_networks[i] = nx.relabel_nodes(social_networks[i], mapping)
+social_network = nx.relabel_nodes(social_network, mapping)
 
 # Now save the relabeled graphs
 for interval_key in day_data_final.keys():  # Use actual interval keys for naming
     # Find the index corresponding to this interval_key
     i = list(day_data_final.keys()).index(interval_key)
     contact_network = contact_networks[i]
-    social_network = social_networks[i]
+    social_network = social_network
 
     if ping_cytoscape:
         cyto_social = nx.to_undirected(social_network)
@@ -177,4 +178,4 @@ for interval_key in day_data_final.keys():  # Use actual interval keys for namin
         p4c.create_network_from_networkx(union_network, title=f"YJMob Networks {interval_key}", collection="YJMob Networks")
 
     nx.write_gml(contact_network, f"experiment_data/yjmob_contact{interval_key}.gml")
-    nx.write_gml(social_network, f"experiment_data/yjmob_social{interval_key}.gml")
+    nx.write_gml(social_network, f"experiment_data/yjmob_social.gml")

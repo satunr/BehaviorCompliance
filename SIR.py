@@ -227,16 +227,19 @@ def Simulate_SIR(contact_network,social_network,T,beta,gamma,mu,init,
         #  People become aware of need to quarantine at time t==begin_q
         elif t == begin_q:
             # Get the initial set of informed nodes
-            if seeds is None:
-                num_seeds = round(0.05 * len(social_network.nodes()))
-                initial_informed_list = find_seeds.find_seed_set(social_network, num_seeds=num_seeds, exponent=1)
-            else:
+            if isinstance(seeds, set) or isinstance(seeds, list):
                 initial_informed_list = seeds
+            elif isinstance(seeds, int) and seeds > 0:
+                num_seeds = seeds
+                initial_informed_list = find_seeds.find_seed_set(social_network, num_seeds=num_seeds, exponent=2)
+            # Handle cases where no seeds are provided
+            elif seeds is None or seeds == [] or seeds == 0:
+                initial_informed_list = []
 
-            # Convert to set immediately
+            # Convert to set if not already a set
             informed = set(initial_informed_list)
 
-            # Non-adhering can still be informed. It is assumed that information is diffused through them too
+            # NOTE: Non-adhering can still be informed
 
             # Set labels for informed set
             for node in informed:
@@ -245,29 +248,31 @@ def Simulate_SIR(contact_network,social_network,T,beta,gamma,mu,init,
 
         #  Influence spreads
         elif t > begin_q:
-            if lt_threshold == None: # If we are using I.C., that is
-                ic_results = IM.IC_prob_matrix(social_network, S=list(informed), p=0.05, mc=1000, quarantining=quarantine_statuses)
-                prob_matrix = ic_results[0]
-                new_informed_list = ic_results[1]
-            else:
-                lt_results = IM.lt_prob_matrix(social_network, threshold=lt_threshold, S=list(informed), quarantining=quarantine_statuses)
-                prob_matrix = lt_results[0]
-                new_informed_list = lt_results[1]
+            # Can only spread if there are some seed nodes
+            if initial_informed_list != []:
+                if lt_threshold == None: # If we are using I.C., that is
+                    ic_results = IM.IC_prob_matrix(social_network, S=list(informed), p=0.02, mc=1000, quarantining=quarantine_statuses)
+                    prob_matrix = ic_results[0]
+                    new_informed_list = ic_results[1]
+                else:
+                    lt_results = IM.lt_prob_matrix(social_network, threshold=lt_threshold, S=list(informed), quarantining=quarantine_statuses)
+                    prob_matrix = lt_results[0]
+                    new_informed_list = lt_results[1]
 
-            quarantine_prob_matrix[t] = prob_matrix
+                quarantine_prob_matrix[t] = prob_matrix
 
-            assert len(informed) > 0, "Informed set is empty!"
+                assert len(informed) > 0, "Informed set is empty!"
 
-            # Convert new activations to set to remove internal duplicates
-            new_informed = set(new_informed_list)
+                # Convert new activations to set to remove internal duplicates
+                new_informed = set(new_informed_list)
 
-            # Update the master informed set with proper union
-            informed = informed.union(new_informed)
+                # Update the master informed set with proper union
+                informed = informed.union(new_informed)
 
-            # Only mark newly informed nodes
-            for node in new_informed:
-                nx.set_node_attributes(contact_network, {node: {'Informed?': 'Informed'}})
-                nx.set_node_attributes(social_network, {node: {'Informed?': 'Informed'}})
+                # Only mark newly informed nodes
+                for node in new_informed:
+                    nx.set_node_attributes(contact_network, {node: {'Informed?': 'Informed'}})
+                    nx.set_node_attributes(social_network, {node: {'Informed?': 'Informed'}})
 
         #-------------
         #
