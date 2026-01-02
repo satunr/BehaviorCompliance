@@ -28,7 +28,7 @@ p = 0.05  # probability of edge
 load_initial = False  # Set to True if you want to existing epidemic states from pickle file
 clear = False  # Set clear to True if you want to use a new network or clear data files. False if you want to keep the existing one.
 verbose = True  # Set verbose to True if you want to see detailed output during optimization
-mode = None  # "standard" or "adherence" or "YJMOB"
+mode = None  # "standard" or "adherence" or "YJMOB" or "sensitivity analysis"
 if len(sys.argv) == 2:
     mode = "YJMOB"
 elif len(sys.argv) == 3:

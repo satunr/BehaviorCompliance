@@ -163,10 +163,16 @@ for i in range(len(contact_networks)):
 social_network = nx.relabel_nodes(social_network, mapping)
 
 # Now save the relabeled graphs
-for interval_key in day_data_final.keys():  # Use actual interval keys for naming
+for interval_key in day_data_final.keys():  # Use interval keys for naming
     # Find the index corresponding to this interval_key
     i = list(day_data_final.keys()).index(interval_key)
     contact_network = contact_networks[i]
+
+    # Print mean node degree for contact network
+    degrees = [deg for node, deg in contact_network.degree()]
+    mean_degree = sum(degrees) / len(degrees)
+    print(f"Interval {interval_key}: Contact Network Mean Node Degree: {mean_degree}")
+
     social_network = social_network
 
     if ping_cytoscape:
@@ -176,6 +182,10 @@ for interval_key in day_data_final.keys():  # Use actual interval keys for namin
         union_network = nx.union(contact_network, cyto_social)
 
         p4c.create_network_from_networkx(union_network, title=f"YJMob Networks {interval_key}", collection="YJMob Networks")
+
+    # Print number of edges in social, contact networks
+    print(f"Interval {interval_key}: Contact Network Edges: {contact_network.number_of_edges()}")
+    print(f"Social Network Edges: {social_network.number_of_edges()}")
 
     nx.write_gml(contact_network, f"experiment_data/yjmob_contact{interval_key}.gml")
     nx.write_gml(social_network, f"experiment_data/yjmob_social.gml")

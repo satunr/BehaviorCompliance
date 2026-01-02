@@ -7,7 +7,7 @@ import networkx as nx
 # p: Probability of activation (can be a scalar or a vector)
 # mc: Number of Monte Carlo simulations
 # quarantining: List of nodes currently quarantining
-def IC_prob_matrix(g, S, p, mc=5000, quarantining=None):
+def IC_prob_matrix(g, S, p, mc=1000, quarantining=None):
     if S == []: raise ValueError("S cannot be empty")
     quarantine_list = []
     
@@ -38,7 +38,7 @@ def IC_prob_matrix(g, S, p, mc=5000, quarantining=None):
 
     return quarantine_matrix, A  # Return the average probability matrix and the final set of informed nodes
 
-def IC(g, S, p, mc=10):
+def IC(g, S, p, mc=1000):
     spread = []
     for _ in range(mc):
         A = S[:]

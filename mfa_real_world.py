@@ -27,12 +27,12 @@ import pickle
 clear = False  # Set clear to True if you want to use a new network or clear data files. False if you want to keep the existing one.
 verbose = False  # Set verbose to True if you want to see detailed output during optimization
 
-#  NOTE: Real-world parameters. These are roughly based on the COVID-19 pandemic (worldwide)
+# Real-world parameters. These are roughly based on the COVID-19 pandemic (worldwide)
 population = 7.8 * 10**9  # World population (~7.8 billion)
 beta = 0.3
 gamma = 0.1
 mu = 0.0055
-max_mnd = 200  # Maximum mean node degree (w1)
+max_mnd = 200  # Maximum mean node degree
 split_point = 50  # Time to split the optimization (in days)
 
 #  Load the daily Covid data from experiment_data/daily_covid.csv

@@ -23,6 +23,7 @@ network3_samples = extract_mfa.parse_sample_data("experiment_data/yjmob3_runs.tx
 network4_samples = extract_mfa.parse_sample_data("experiment_data/yjmob4_runs.txt")
 
 all_samples = [network0_samples, network1_samples, network2_samples, network3_samples, network4_samples]
+
 post_quarantine_samples = all_samples[2:]  # Samples after quarantine begins
 
 # Population
@@ -86,8 +87,10 @@ ax.grid(True, alpha=0.3)
 plt.tight_layout()
 # plt.show()
 
-# FIXME: Generalize this logic so it doesn't break for samples with multiple runs
-if len(network0_samples) == 1:
+def plot_mfa_estimated_degree():
+    # Temp. Shorten all to just the first sample for plotting
+    plotting_samples = [sample[0] for sample in all_samples]
+
     # ============================
     # Align TRUE to ESTIMATED for a single sample
     # ============================
@@ -98,7 +101,6 @@ if len(network0_samples) == 1:
         x_true = np.array(sample["w1 True (Mean Node Degree)"]["x"])
         y_true = np.array(sample["w1 True (Mean Node Degree)"]["y"])
 
-        # Keep only true values at the same time points as estimated
         mask = np.isin(x_true, x_est)
         return x_est, y_est, y_true[mask]
 
@@ -107,40 +109,82 @@ if len(network0_samples) == 1:
     # ============================
     fig, ax = plt.subplots(figsize=(14, 8))
 
+    # Store per-interval true means
+    true_interval_means = []
+
     # --- Plot TRUE mean degree for each individual 15-day interval ---
-    for i, sample in enumerate(all_samples):
+    for i, sample in enumerate(plotting_samples):
         x_local, _, y_true_local = align_true_to_est(sample)
         t_global = x_local + i * days_per_sample
 
-        ax.plot(t_global, y_true_local, color="black", linestyle="-", linewidth=3)
+        # Save mean of this interval
+        true_interval_means.append(y_true_local.mean())
 
-    # --- Compute and plot ESTIMATED mean degree separately for each individual sample ---
-    for i, sample in enumerate(all_samples):
+        # DOTTED short horizontal ground-truth lines
+        ax.plot(
+            t_global,
+            y_true_local,
+            color="black",
+            linestyle=":",
+            linewidth=3
+        )
+
+    # --- Compute pre/post quarantine ground-truth means ---
+    pre_quarantine_mean = np.mean(true_interval_means[:2])
+    post_quarantine_mean = np.mean(true_interval_means[2:])
+
+    # --- Draw solid horizontal mean lines ---
+    ax.hlines(
+        pre_quarantine_mean,
+        xmin=0,
+        xmax=2 * days_per_sample,
+        colors="black",
+        linestyles="-",
+        linewidth=4
+    )
+
+    ax.hlines(
+        post_quarantine_mean,
+        xmin=2 * days_per_sample,
+        xmax=5 * days_per_sample,
+        colors="black",
+        linestyles="-",
+        linewidth=4
+    )
+
+    # --- Compute and plot ESTIMATED mean degree ---
+    for i, sample in enumerate(plotting_samples):
         x_local, y_est_local, _ = align_true_to_est(sample)
         t_global = x_local + i * days_per_sample
 
-        # Interpolate all individual runs onto this sample's estimated x grid
         runs_interp_local = []
         for run_y in sample["w1 all runs"]["y"]:
             run_interp = np.interp(x_local, sample["w1 all runs"]["x"], run_y)
             runs_interp_local.append(run_interp)
 
-        # Compute mean and std for this specific sample
         runs_array = np.array(runs_interp_local)
         sample_mean = runs_array.mean(axis=0)
         sample_std = runs_array.std(axis=0)
 
-        # Choose color based on pre/post
         color = "#ff7f0e" if i < 2 else "#d62728"
 
-        # Plot the mean estimated curve for this sample
-        ax.plot(t_global, sample_mean, color=color, linestyle="--", linewidth=3,
-                label="Estimated ⟨k⟩ (pre-quarantine)" if i == 0 else 
-                    "Estimated ⟨k⟩ (post-quarantine)" if i == 2 else None)
+        ax.plot(
+            t_global,
+            sample_mean,
+            color=color,
+            linestyle="--",
+            linewidth=3,
+            label="Estimated ⟨k⟩ (pre-quarantine)" if i == 0 else
+                  "Estimated ⟨k⟩ (post-quarantine)" if i == 2 else None
+        )
 
-        # Fill std band for this sample
-        ax.fill_between(t_global, sample_mean - sample_std, sample_mean + sample_std,
-                        color=color, alpha=0.25)
+        ax.fill_between(
+            t_global,
+            sample_mean - sample_std,
+            sample_mean + sample_std,
+            color=color,
+            alpha=0.25
+        )
 
     # --- Quarantine start marker ---
     ax.axvline(split_point, color="gray", linestyle="--", linewidth=2, label="Quarantine begins")
@@ -150,15 +194,21 @@ if len(network0_samples) == 1:
     # ============================
     ax.set_xlabel("Time (days)")
     ax.set_ylabel("Mean Node Degree ⟨k⟩")
-    ax.set_title("Estimated Degree from Mean Field Approximation on YJMob100k Dataset")
+    ax.set_title("Estimated Degree on YJMob100k Dataset")
 
     ax.legend(frameon=False, loc="upper left")
     ax.grid(True, alpha=0.3)
     ax.set_xlim(0, 75)
 
     plt.tight_layout()
-    plt.savefig("experiment_data/mfa_degree_estimates_continuous_5samples.pdf", format="pdf", bbox_inches="tight")
+    plt.savefig(
+        "experiment_data/mfa_degree_estimates_continuous_5samples.pdf",
+        format="pdf",
+        bbox_inches="tight"
+    )
     plt.close(fig)
+
+plot_mfa_estimated_degree()
 
 #----------------
 #
@@ -166,10 +216,11 @@ if len(network0_samples) == 1:
 #
 #----------------
 
+# First 2 networks: pre-quarantine
 pre_q_sample0 = network0_samples[0]
 pre_q_sample1 = network1_samples[0]
-k_0_est_1 = pre_q_sample0["w1 Estimated"]["y"][-1]
-k_0_est_2 = pre_q_sample1["w1 Estimated"]["y"][-1]
+k_0_est_1 = pre_q_sample0["w1 True (Mean Node Degree)"]["y"][-1]
+k_0_est_2 = pre_q_sample1["w1 True (Mean Node Degree)"]["y"][-1]
 # Assumption: networks are relatively unchanged before quarantining begins
 k_0 = (k_0_est_1 + k_0_est_2) / 2
 

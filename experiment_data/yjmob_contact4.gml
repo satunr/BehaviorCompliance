@@ -1161,19 +1161,19 @@ graph [
   ]
   node [
     id 290
-    label "225"
-  ]
-  node [
-    id 291
     label "190"
   ]
   node [
+    id 291
+    label "243"
+  ]
+  node [
     id 292
-    label "231"
+    label "225"
   ]
   node [
     id 293
-    label "157"
+    label "280"
   ]
   node [
     id 294
@@ -1181,15 +1181,15 @@ graph [
   ]
   node [
     id 295
-    label "243"
-  ]
-  node [
-    id 296
     label "192"
   ]
   node [
+    id 296
+    label "231"
+  ]
+  node [
     id 297
-    label "280"
+    label "157"
   ]
   edge [
     source 0
