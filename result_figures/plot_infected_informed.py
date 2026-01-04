@@ -7,6 +7,7 @@ import pickle
 # Global matplotlib settings
 # ============================================================
 
+# Global matplotlib settings for publication-quality figures
 plt.rcParams.update({
     "font.size": 18,
     "axes.titlesize": 22,
@@ -23,8 +24,8 @@ plt.rcParams.update({
 
 PKL_FILENAME = "result_figures/plot_infected_informed_data.pkl"
 
-FIG_GROUPED_PDF = "experiment_data/quarantine_dynamics_by_adherence.pdf"
-FIG_SINGLE_PDF  = "experiment_data/joint_informed_infected_dynamics.pdf"
+FIG_GROUPED_PDF = "result_figures/quarantine_dynamics_by_adherence.pdf"
+FIG_SINGLE_PDF  = "result_figures/joint_informed_infected_dynamics.pdf"
 
 # ============================================================
 # Adherence data locations
@@ -195,53 +196,3 @@ def plot_one_adherence_group(samples, show=False):
         plt.show()
 
     print(f"Saved single adherence figure → {FIG_SINGLE_PDF}")
-
-# ============================================================
-# Pairwise standardized L2 distances
-# ============================================================
-
-def compute_pairwise_L2_informed_infected():
-
-    with open(PKL_FILENAME, "rb") as f:
-        data = pickle.load(f)
-
-    grouped = data["grouped_results"]
-    adherence_levels = sorted(grouped.keys())
-    k = len(adherence_levels)
-
-    means = {a: np.array(grouped[a]["Informed & Infected_mean"]) for a in adherence_levels}
-    stds  = {a: np.array(grouped[a]["Informed & Infected_std"])  for a in adherence_levels}
-
-    D = np.zeros((k, k))
-
-    for i, ai in enumerate(adherence_levels):
-        for j, aj in enumerate(adherence_levels):
-
-            if i == j:
-                continue
-
-            pooled = np.sqrt(stds[ai]**2 + stds[aj]**2)
-            valid = pooled > 0
-
-            z = np.zeros_like(means[ai])
-            z[valid] = (means[ai][valid] - means[aj][valid]) / pooled[valid]
-
-            D[i, j] = np.sqrt(np.mean(z**2))
-
-    return adherence_levels, D
-
-# if __name__ == "__main__":
-    # read_file = "experiment_data/a_1.0"
-    # samples = extract_mfa.parse_sample_data(read_file)
-    # samples = [samples[i] for i in range(len(samples)) if i % 2 == 1]
-    
-    # # Shorten every sample to first 70 time steps
-    # for sample in samples:
-    #     for key in sample:
-    #         if isinstance(sample[key], dict) and 'y' in sample[key]:
-    #             sample[key]['y'] = sample[key]['y'][:70]
-    #             sample[key]['x'] = sample[key]['x'][:70]
-
-    # plot_one_adherence_group(samples, show=True)
-
-    # plot_groups_by_adherence(show=True)

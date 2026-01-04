@@ -1,14 +1,10 @@
 import networkx as nx
 import matplotlib.pyplot as plt
-import parse
-import correlated_graphs
 import IM
 import find_seeds
 import numpy as np
-from copy import deepcopy
 from sklearn.metrics import mean_squared_error
 import random
-import py4cytoscape as p4c
 
 ping_cytoscape = False
 

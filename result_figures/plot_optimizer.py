@@ -3,6 +3,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pickle
 
+# Global matplotlib settings for publication-quality figures
+plt.rcParams.update({
+    "font.size": 18,
+    "axes.titlesize": 22,
+    "axes.labelsize": 20,
+    "xtick.labelsize": 16,
+    "ytick.labelsize": 16,
+    "legend.fontsize": 16,
+    "figure.titlesize": 24,
+    "lines.linewidth": 2.5,
+})
+
 # Plot w1_all_runs for specified half
 # even_or_odd = 0: only plot first half (k_0) estimates
 # even_or_odd = 1: only plot second half (k_q) estimates
@@ -84,11 +96,19 @@ def plot_optimizer_results(samples, even_or_odd):
         plt.title(r'$\langle k \rangle$ Estimates with Varying $\beta$')
     plt.legend()
     plt.grid(True)
+
+    plt.savefig(
+        "result_figures/optimizer_results.pdf",
+        format="pdf",
+        bbox_inches="tight"
+    )
+
     plt.show()
 
     # --- Save everything to a .pkl file ---
     with open("result_figures/plot_optimizer_data.pkl", "wb") as f:
         pickle.dump(results_list, f)
 
-samples = extract_mfa.parse_sample_data('experiment_data/mfa_xy_data.txt')
-plot_optimizer_results(samples, even_or_odd=0)
+if __name__ == "__main__":
+    samples = extract_mfa.parse_sample_data('experiment_data/mfa_xy_data.txt')
+    plot_optimizer_results(samples, even_or_odd=0)

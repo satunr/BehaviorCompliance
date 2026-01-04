@@ -110,6 +110,11 @@ def restore_edges(g_init, g, node, already_quarantining):
 # initial_state_dict: Optional dictionary mapping node -> state (0=S, 1=I, 2=R). If provided, uses this instead of random initial infections.
 def Simulate_SIR(contact_network,social_network,T,beta,gamma,mu,init,
                  q=False,lt_threshold=None,adherence=None,begin_q=0,seeds=None,initial_state_dict=None):
+    
+    # Generate seed set if not provided
+    if seeds is None:
+        seeds = find_seeds.find_seed_set(social_graph=social_network, num_seeds=10, exponent=2)
+
     if begin_q is None:
         begin_q = 0
 
@@ -144,12 +149,9 @@ def Simulate_SIR(contact_network,social_network,T,beta,gamma,mu,init,
     G_initial = deepcopy(contact_network)
 
     # Initial state dictionary (0: susceptible, 1: infected, 2: recovered)
-    # Modified to allow user-provided initial_state_dict instead of random initialization based on 'init' probability
+    # Handle user-provided initial_state_dict
     if initial_state_dict is not None:
         state = initial_state_dict.copy()  # Use provided dictionary directly
-        # Basic validation: ensure all nodes are present and values are valid
-        assert set(state.keys()) == set(range(n)), "initial_state_dict must contain all nodes 0 to n-1"
-        assert all(v in [0, 1, 2] for v in state.values()), "initial_state_dict values must be 0, 1, or 2"
     else:
         # Fall back to original random initialization using 'init' probability
         state = {u: np.random.choice(a=[1, 0], size=1, p=[init, 1 - init])[0]

@@ -1,4 +1,4 @@
-import loss_calc_simple as lc
+import lt_ic_loss_function as lc
 import numpy as np
 import parse
 import correlated_graphs

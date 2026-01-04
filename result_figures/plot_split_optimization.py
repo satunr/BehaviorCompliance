@@ -1,7 +1,9 @@
 import extract_mfa
 import matplotlib.pyplot as plt
 import numpy as np
+import pickle
 
+# Global matplotlib settings for publication-quality figures
 plt.rcParams.update({
     "font.size": 18,
     "axes.titlesize": 22,
@@ -9,7 +11,6 @@ plt.rcParams.update({
     "xtick.labelsize": 16,
     "ytick.labelsize": 16,
     "legend.fontsize": 16,
-    "figure.titlesize": 24,
     "lines.linewidth": 2.5,
 })
 
@@ -122,5 +123,34 @@ ax.grid(True, alpha=0.3)
 
 plt.tight_layout()
 
-plt.savefig("mfa_degree_estimates.pdf", format="pdf", bbox_inches="tight")
+plt.savefig("result_figures/mfa_degree_estimates.pdf", format="pdf", bbox_inches="tight")
 plt.close(fig)
+
+# ---------------------------
+# Save results to PKL
+# ---------------------------
+PKL_FILENAME = "result_figures/mfa_degree_estimates_data.pkl"
+
+save_dict = {
+    "split_point": float(split_point),
+    "x_pre": x_pre.tolist(),
+    "x_post": x_post.tolist(),
+    "y_pre_true": y_pre_true.tolist(),
+    "y_post_true": y_post_true.tolist(),
+    "y_pre_est": y_pre_est.tolist(),
+    "y_post_est": y_post_est.tolist(),
+    "pre_mean": pre_mean.tolist(),
+    "pre_std": pre_std.tolist(),
+    "post_mean": post_mean.tolist(),
+    "post_std": post_std.tolist(),
+    "pre_all_runs": [run.tolist() for run in pre["w1 all runs"]["y"]],
+    "post_all_runs": [run.tolist() for run in post["w1 all runs"]["y"]]
+}
+
+# Safe write
+try:
+    with open(PKL_FILENAME, "wb") as f:
+        pickle.dump(save_dict, f)
+    print(f"Plot data successfully saved to {PKL_FILENAME}")
+except Exception as e:
+    print("Error saving PKL:", e)

@@ -1,6 +1,7 @@
 import extract_mfa
 import matplotlib.pyplot as plt
 import numpy as np
+import pickle
 
 # Global matplotlib settings for publication-quality figures
 plt.rcParams.update({
@@ -57,5 +58,30 @@ ax.legend()
 ax.grid(True, alpha=0.3)
 
 plt.tight_layout()
-plt.savefig('experiment_data/proportion_informed.pdf', bbox_inches='tight')
+plt.savefig('result_figures/proportion_informed.pdf', bbox_inches='tight')
 plt.close()
+
+# ---------------------------
+# Save results to PKL
+# ---------------------------
+PKL_FILENAME = "result_figures/proportion_informed_results.pkl"
+
+save_dict = {
+    "split_point": int(split_point),
+    "time": time.tolist(),
+    "informed_mean_full": informed_full.tolist(),
+    "informed_std_full": informed_std_full.tolist(),
+    "informed_mean_post_split": informed_mean.tolist(),
+    "informed_std_post_split": informed_std.tolist(),
+    "informed_runs_raw": [run.tolist() for run in informed_runs],
+    "num_runs": len(informed_runs),
+    "total_time_points": int(T)
+}
+
+# Safe write
+try:
+    with open(PKL_FILENAME, "wb") as f:
+        pickle.dump(save_dict, f)
+    print(f"Results successfully saved to {PKL_FILENAME}")
+except Exception as e:
+    print("Error saving PKL:", e)

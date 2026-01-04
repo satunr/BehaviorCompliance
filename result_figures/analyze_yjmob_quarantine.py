@@ -3,7 +3,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import minimize
 import random
+import pickle 
 
+# Global matplotlib settings for publication-quality figures
 plt.rcParams.update({
     "font.size": 18,
     "axes.titlesize": 22,
@@ -11,9 +13,12 @@ plt.rcParams.update({
     "xtick.labelsize": 16,
     "ytick.labelsize": 16,
     "legend.fontsize": 16,
-    "figure.titlesize": 24,
     "lines.linewidth": 2.5,
 })
+
+# Consistent figure size for all plots (suitable for Overleaf inclusion)
+FIGURE_SIZE_LINE = (10, 6)
+FIGURE_SIZE_BAR = (14, 8)
 
 # Load all 5 consecutive samples
 network0_samples = extract_mfa.parse_sample_data("experiment_data/yjmob0_runs.txt")
@@ -58,7 +63,7 @@ i_prime_mean = np.mean(np.array(inf_inf_runs), axis=0)
 i_prime_std = np.std(np.array(inf_inf_runs), axis=0)
 
 # Plot k_q with mean and std bands
-fig, ax = plt.subplots(figsize=(10, 6))
+fig, ax = plt.subplots(figsize=FIGURE_SIZE_LINE)
 ax.plot(range(len(k_q_true_mean)), k_q_true_mean, color='#ff7f0e', label='Mean estimated ⟨k_q⟩')
 ax.fill_between(range(len(k_q_true_mean)),
                 k_q_true_mean - k_q_std,
@@ -73,7 +78,7 @@ plt.tight_layout()
 # plt.show()
 
 # Plot infected & informed with mean and std bands
-fig, ax = plt.subplots(figsize=(10, 6))
+fig, ax = plt.subplots(figsize=FIGURE_SIZE_LINE)
 ax.plot(range(len(i_prime_mean)), i_prime_mean, color='blue', label='Mean Informed & Infected')
 ax.fill_between(range(len(i_prime_mean)),
                 i_prime_mean - i_prime_std,
@@ -202,7 +207,7 @@ def plot_mfa_estimated_degree():
 
     plt.tight_layout()
     plt.savefig(
-        "experiment_data/mfa_degree_estimates_continuous_5samples.pdf",
+        "result_figures/mfa_degree_estimates_continuous_5samples.pdf",
         format="pdf",
         bbox_inches="tight"
     )
@@ -287,7 +292,7 @@ t_vals = np.arange(split_point, split_point + T_post)
 # ---------------------------
 # Plot cumulative adherence
 # ---------------------------
-fig, ax = plt.subplots(figsize=(10, 6))
+fig, ax = plt.subplots(figsize=FIGURE_SIZE_LINE)
 
 ax.plot(t_vals, adh_mean, linewidth=2.5, color='#ff7f0e',
         label='Estimated adherence (mean)')
@@ -321,7 +326,7 @@ ax.legend(frameon=False)
 plt.tight_layout()
 
 plt.savefig(
-    "experiment_data/cumulative_adherence_estimate.pdf",
+    "result_figures/cumulative_adherence_estimate.pdf",
     format="pdf",
     bbox_inches="tight"
 )
@@ -331,35 +336,29 @@ plt.close(fig)
 # ---------------------------
 # Save results to PKL
 # ---------------------------
-# save_dict = {
-#     "k_0": float(k_0),
-#     "k_q": float(k_q),
-#     "split_point": int(split_point),
-#     "adhering_proportion": adhering_proportion,
-#     "population": int(population),
-#     "num_simulations": int(num_simulations),
-#     "time_after_q": int(T),
-#     "i_prime_mean": i_prime.tolist(),
-#     "inf_inf_runs": inf_inf_runs.tolist(),
-#     "k_q_true": k_q_true.tolist(),
-#     "best_S_lst": [float(x) for x in best_S_lst],
-#     "best_adh_lst": [float(x) for x in best_adh_lst],
-#     "best_S_mean": best_S,
-#     "best_adh_mean": best_adherence,
-#     "best_S_std": S_std,
-#     "best_adh_std": adherence_std,
-#     "k_q_est_runs": k_q_est_runs.tolist(),
-#     "k_q_est_mean": k_q_est_mean.tolist(),
-#     "k_q_est_std": k_q_est_std.tolist(),
-#     "cumulative_adh_runs": cumulative_adh.tolist(),
-#     "cumulative_adh_mean": adh_mean.tolist(),
-#     "cumulative_adh_std": adh_std.tolist(),
-#     "t_vals": t_vals.tolist()
-# }
+PKL_FILENAME = "result_figures/cumulative_adherence_results.pkl"  # <-- Added definition
+
+save_dict = {
+    "k_0": float(k_0),
+    "split_point": int(split_point),
+    "adhering_proportion": float(adhering_proportion),
+    "population": int(n),
+    "num_simulations": int(num_runs),
+    "time_after_q": int(T_post),
+    "i_prime_mean": i_prime_mean.tolist(),
+    "inf_inf_runs": [run.tolist() for run in inf_inf_runs],
+    "k_q_true_mean": k_q_true_mean.tolist(),
+    "k_q_true_runs": [run.tolist() for run in k_q_runs],
+    "cumulative_adh_runs": cumulative_adh.tolist(),
+    "cumulative_adh_mean": adh_mean.tolist(),
+    "cumulative_adh_std": adh_std.tolist(),
+    "t_vals": t_vals.tolist()
+}
 
 # safe write
-# try:
-#     with open(PKL_FILENAME, "wb") as f:
-#         pickle.dump(save_dict, f)
-# except Exception as e:
-#     print("Error saving PKL:", e)
+try:
+    with open(PKL_FILENAME, "wb") as f:
+        pickle.dump(save_dict, f)
+    print(f"Results successfully saved to {PKL_FILENAME}")
+except Exception as e:
+    print("Error saving PKL:", e)

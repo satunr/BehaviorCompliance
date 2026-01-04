@@ -106,6 +106,7 @@ graph [
   node [
     id 26
     label "26"
+    is_seed "Seed"
   ]
   node [
     id 27
@@ -158,10 +159,12 @@ graph [
   node [
     id 39
     label "39"
+    is_seed "Seed"
   ]
   node [
     id 40
     label "40"
+    is_seed "Seed"
   ]
   node [
     id 41
@@ -318,6 +321,7 @@ graph [
   node [
     id 79
     label "79"
+    is_seed "Seed"
   ]
   node [
     id 80
@@ -342,6 +346,7 @@ graph [
   node [
     id 85
     label "85"
+    is_seed "Seed"
   ]
   node [
     id 86
@@ -422,6 +427,7 @@ graph [
   node [
     id 105
     label "105"
+    is_seed "Seed"
   ]
   node [
     id 106
@@ -446,6 +452,7 @@ graph [
   node [
     id 111
     label "111"
+    is_seed "Seed"
   ]
   node [
     id 112
@@ -530,6 +537,7 @@ graph [
   node [
     id 132
     label "132"
+    is_seed "Seed"
   ]
   node [
     id 133
@@ -538,6 +546,7 @@ graph [
   node [
     id 134
     label "134"
+    is_seed "Seed"
   ]
   node [
     id 135
@@ -654,6 +663,7 @@ graph [
   node [
     id 163
     label "163"
+    is_seed "Seed"
   ]
   node [
     id 164

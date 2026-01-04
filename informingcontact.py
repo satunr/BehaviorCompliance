@@ -35,9 +35,9 @@ Repeat = 1
 # Epidemic parameters
 beta = 0.3  # Infection rate
 gamma = 0.03  # Recovery rate
-mu = 0.5  # Immunity loss rate
+mu = 0.05  # Immunity loss rate
 init = 0.05
-verbose = False # Set to false if you don't want to plot anything from SIR.py
+verbose = False
 q = False
 
 # Specify the filename

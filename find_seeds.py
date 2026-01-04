@@ -3,12 +3,12 @@ import numpy as np
 import IM
 
 # Probabilistic way of finding seed nodes, given an initial set
-#   Governed by: P_i(seed) = (d_i)^k / sum_j ((d_j)^k)
+#   P_i(seed) = (d_i)^k / sum_j ((d_j)^k)
 # n is the number of seeds we want
 # exponent to control degree weighting
-def find_seed_set(g, num_seeds, exponent=1):
+def find_seed_set(social_graph, num_seeds, exponent=1):
     # Get degrees of all nodes
-    degrees = dict(g.degree())  # {node: degree}
+    degrees = dict(social_graph.degree())  # {node: degree}
 
     # Calculate probabilities
     nodes = list(degrees.keys())
@@ -24,7 +24,7 @@ def find_seed_set(g, num_seeds, exponent=1):
     seed_set = list(np.random.choice(nodes, size=num_seeds, replace=False, p=probs))
 
     for node in seed_set:
-        nx.set_node_attributes(g, {node: {'Seed?': 'Seed'}})
+        nx.set_node_attributes(social_graph, {node: {'is_seed': 'Seed'}})
 
     return seed_set
 

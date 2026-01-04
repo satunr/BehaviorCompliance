@@ -1,6 +1,9 @@
 # Use this file to run the mean field approximation several times
 import subprocess
 import sys
+import find_seeds
+import networkx as nx
+import correlated_graphs
 
 repeat = 25  # Number of times to run the MFA
 
@@ -17,14 +20,8 @@ def adherence_mode():
     # Iteratively run MFA for each adherence level
     for i in range(len(write_to)):
         for _ in range(repeat):
-            subprocess.run([sys.executable, "mean_field_approx.py", write_to[i], str(adherence_level[i])])
-    # subprocess.run([sys.executable, "result_figures/analyze_quarantine_dynamics.py"])
-
-# Run mean field approximation on real-world time-series infection data
-def run_real_world():
-    #  Split point is in mfa_real_world.py
-    subprocess.run([sys.executable, "mfa_real_world.py", "--first_half"])
-    subprocess.run([sys.executable, "mfa_real_world.py", "--second_half"])
+            subprocess.run([sys.executable, "mean_field_approx.py", write_to[i], str(adherence_level[i]),
+                            "adherence mode"])
 
 def simple_repeat():
     for _ in range(repeat):
@@ -42,26 +39,83 @@ def yjmob_mode():
         # File index: correspond to different time intervals in YJMob dataset
         for file_index in range(5):
             subprocess.run([sys.executable, "mean_field_approx.py", 
-                            str(file_index)])
+                            str(file_index), "yjmob mode"])
             
 # Quantities under consideration for sensitivity analysis:
 # number of seeds, transmission rate, density of the network
+# System argument has following structure:
+# mean_field_approx.py <num_seeds> <transmission_rate> <write_file>
 def sensitivity_analysis():
+    files_to_clear = ["experiment_data/sensitivity_num_seeds.txt",
+                      "experiment_data/sensitivity_transmission_rate.txt",
+                      "experiment_data/sensitivity_density.txt"
+                      ]
+    
+    for file in files_to_clear:
+        open(file, "w").close()
+
+    contact_network = nx.erdos_renyi_graph(200, 0.05)
+    num_nodes = len(contact_network.nodes())
+    default_seeds = find_seeds.find_seed_set(contact_network, num_seeds=10, exponent=2)
+    default_seed_arg = str(list(map(int, default_seeds)))
+    default_beta_arg = "0.15"
+    default_social = correlated_graphs.create_social_graph(contact_network, nE=2*num_nodes)[0]
+
+    # Default contact
+    # nx.write_gml(contact_network, "experiment_data/mfa_contact.gml")
+    # Use default social network. Write it to file for MFA to read
+    nx.write_gml(default_social, "experiment_data/mfa_social.gml")
+
     # First, vary number of seeds
-    num_seeds_list = [5, 10, 15]
-    for num_seeds in num_seeds_list:
+    # Append new seeds to existing set to reduce variability
+    seeds = find_seeds.find_seed_set(contact_network, num_seeds=5, exponent=2)
+    num_comparisons = 3
+    for i in range(num_comparisons):
+        # Add 5 more unique seeds in each comparison
+        while len(seeds) < 5 * (i + 1):
+            new_seed = find_seeds.find_seed_set(contact_network, num_seeds=1, exponent=2)
+            if new_seed[0] not in seeds:
+                seeds += new_seed
+        seed_arg = str(list(map(int, seeds)))
         for _ in range(repeat):
             subprocess.run([sys.executable, "mean_field_approx.py", 
-                            str(num_seeds), "0.3", "0.01"])
-    for _ in range(repeat):
-        subprocess.run([sys.executable, "mean_field_approx.py", 
-                        str(num_seeds), str(beta), str(density)])
+                            str(seed_arg), default_beta_arg, 
+                            "experiment_data/sensitivity_num_seeds.txt",
+                            "sensitivity analysis mode",
+                            ])
+    
+    # Next, vary transmission rate
+    beta_list = [0.05, 0.10, 0.20]
+    for beta in beta_list:
+        for _ in range(repeat):
+            subprocess.run([sys.executable, "mean_field_approx.py", 
+                            str(default_seed_arg), str(beta), 
+                            "experiment_data/sensitivity_transmission_rate.txt",
+                            "sensitivity analysis mode",
+                            ])
+    
+    # Finally, vary density of the social network
+    density_list = [0.025, 0.05, 0.075]
+    for density in density_list:
+        contact_network = nx.erdos_renyi_graph(n=num_nodes, p=density)
+        # # Generate new social network with given density
+        # social_network = correlated_graphs.create_social_graph(contact_network, nE=density)[0]
+        # Overwrite existing social network file
+        nx.write_gml(contact_network, "experiment_data/mfa_contact.gml") 
+
+        for _ in range(repeat):
+            subprocess.run([sys.executable, "mean_field_approx.py", 
+                            str(default_seed_arg), default_beta_arg, 
+                            "experiment_data/sensitivity_density.txt",
+                            "sensitivity analysis mode",
+                            ])
 
 # adherence_mode: Run MFA with different adherence levels
-# run_real_world: Run MFA on real-world COVID-19 dataset
 # simple_repeat: Run MFA several times with same configuration
 # yjmob_mode: Run MFA on YJMob dataset
 # sensitivity_analysis: Run MFA for sensitivity analysis on parameters
 
 if __name__ == "__main__":
+    adherence_mode()
+    yjmob_mode()
     sensitivity_analysis()

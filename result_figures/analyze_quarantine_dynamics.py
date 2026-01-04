@@ -4,7 +4,6 @@ import extract_mfa
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.optimize import minimize
-from mpl_toolkits.mplot3d import Axes3D
 import random
 
 # ---------------------------
@@ -12,14 +11,20 @@ import random
 # ---------------------------
 PKL_FILENAME = "result_figures/analyze_quarantine_dynamics_data.pkl"
 
+# Global matplotlib settings for publication-quality figures
 plt.rcParams.update({
-    "font.size": 14,
-    "axes.titlesize": 16,
-    "axes.labelsize": 15,
-    "legend.fontsize": 12,
-    "xtick.labelsize": 13,
-    "ytick.labelsize": 13
+    "font.size": 18,
+    "axes.titlesize": 22,
+    "axes.labelsize": 20,
+    "xtick.labelsize": 16,
+    "ytick.labelsize": 16,
+    "legend.fontsize": 16,
+    "lines.linewidth": 2.5,
 })
+
+# Consistent figure size for all plots (suitable for Overleaf inclusion)
+FIGURE_SIZE_LINE = (10, 6)
+FIGURE_SIZE_BAR = (14, 8)
 
 # read_file = "experiment_data/mfa_xy_data.txt"
 read_file = ("experiment_data/a_1.0")
@@ -120,46 +125,6 @@ def mse_loss(params, i_prime_cur):
 
 #---------------
 #
-#  Plot MSE surface for visualization
-#
-#---------------
-
-# # --- Define ranges for the parameters ---
-# S_vals = np.linspace(0, 2, 50)     
-# adherence_vals = np.linspace(0, 1, 10)
-
-# S_grid, A_grid = np.meshgrid(S_vals, adherence_vals)
-
-# # --- Compute MSE surface ---
-# MSE_grid = np.zeros_like(S_grid)
-
-# for i in range(S_grid.shape[0]):
-#     for j in range(S_grid.shape[1]):
-#         MSE_grid[i, j] = mse_loss(
-#             (S_grid[i, j], A_grid[i, j]),
-#             i_prime
-#         )
-
-# # --- Plot ---
-# fig = plt.figure(figsize=(10, 7))
-# ax = fig.add_subplot(111, projection='3d')
-
-# surf = ax.plot_surface(
-#     S_grid, A_grid, MSE_grid,
-#     linewidth=0, antialiased=True
-# )
-
-# ax.set_xlabel("S")
-# ax.set_ylabel("adherence")
-# ax.set_zlabel("MSE Loss")
-
-# ax.set_title("MSE Loss Surface")
-
-# fig.colorbar(surf, shrink=0.5, aspect=10)
-# plt.show()
-
-#---------------
-#
 #  Joint optimization to find best (S, adherence)
 #
 #---------------
@@ -172,7 +137,6 @@ ADHERENCE_RANGE = (0.0, 1.0)
 best_S_lst = []
 best_adh_lst = []
 
-# NOTE: Should we optimize on the average curve instead of per-run curves?
 # Iterate over runs in samples
 for r in range(num_simulations):
     # Optimize for a given run
@@ -196,8 +160,6 @@ print("S std:", S_std, "adherence std:", adherence_std)
 print("Approximate adherence confidence interval (95%):", (best_adherence - 1.96 * (adherence_std / np.sqrt(num_simulations)),
                                          best_adherence + 1.96 * (adherence_std / np.sqrt(num_simulations))))
 
-# NOTE: Should k_q_est_best be computed using best_S and best_adherence from average, or per-run estimates?
-# estimated k_q using average best parameters (curve)
 k_q_est_best = np.array([k_0 * (1 - best_S * best_adherence * i_prime[t]) for t in range(len(i_prime))])
 
 # per-run k_q estimates for computing mean/std bands
@@ -210,30 +172,57 @@ k_q_est_mean = np.mean(k_q_est_runs, axis=0)
 k_q_est_std = np.std(k_q_est_runs, axis=0)
 
 # ---------------------------
-# Plot <k_q> true vs estimated (with larger fonts)
+# Plot <k_q> true vs estimated
 # ---------------------------
-plt.figure(figsize=(10, 6))
+fig, ax = plt.subplots(figsize=FIGURE_SIZE_LINE)
+
 # Shift x values by split_point
 xvals = np.arange(split_point, split_point + T)
-plt.plot(xvals, k_q_true_mean, label=r'True $\langle k_q \rangle$', color='#1f77b4', linewidth=2.5)
-plt.plot(xvals, k_q_est_best, label=r'Estimated $\langle k_q \rangle$ (best params)', color='#ff7f0e', linestyle='--', linewidth=2.5)
-# Plot std band for estimates
-plt.fill_between(xvals,
-                 k_q_est_mean - k_q_est_std,
-                 k_q_est_mean + k_q_est_std,
-                 color='#ff7f0e', alpha=0.25, label='Estimate ± 1 std (all runs)')
-# Plot std band for true k_q
-plt.fill_between(xvals,
-                    k_q_true_mean - k_q_true_std,
-                    k_q_true_mean + k_q_true_std,
-                    color='#1f77b4', alpha=0.2, label='True ± 1 std')
-plt.xlabel('Time (in days)', fontsize=15)
-plt.ylabel(r'$\langle k_q \rangle$', fontsize=15)
-plt.title(r'$\langle k_q \rangle$ Parameter Optimization vs Ground Truth', fontsize=17)
-plt.legend(fontsize=12)
-plt.grid(True, alpha=0.3)
+
+ax.plot(
+    xvals,
+    k_q_true_mean,
+    label=r'True $\langle k_q \rangle$',
+    color='#1f77b4'
+)
+
+ax.plot(
+    xvals,
+    k_q_est_best,
+    label=r'Estimated $\langle k_q \rangle$ (best params)',
+    color='#ff7f0e',
+    linestyle='--'
+)
+
+# Std band for estimates
+ax.fill_between(
+    xvals,
+    k_q_est_mean - k_q_est_std,
+    k_q_est_mean + k_q_est_std,
+    color='#ff7f0e',
+    alpha=0.25,
+    label=r'Estimate $\pm$ 1 std (all runs)'
+)
+
+# Std band for true k_q
+ax.fill_between(
+    xvals,
+    k_q_true_mean - k_q_true_std,
+    k_q_true_mean + k_q_true_std,
+    color='#1f77b4',
+    alpha=0.2,
+    label=r'True $\pm$ 1 std'
+)
+
+ax.set_xlabel('Time (days)')
+ax.set_ylabel(r'$\langle k_q \rangle$')
+ax.set_title(r'$\langle k_q \rangle$ Parameter Optimization vs Ground Truth')
+ax.legend()
+ax.grid(True)
+
 plt.tight_layout()
-plt.show()
+plt.savefig('result_figures/kq_true_vs_estimated.pdf', bbox_inches='tight')
+plt.close()
 
 # ---------------------------
 #
@@ -280,21 +269,45 @@ t_vals = np.arange(split_point, split_point + T)
 # ---------------------------
 # Plot cumulative adherence
 # ---------------------------
-plt.figure(figsize=(10, 6))
-plt.plot(t_vals, adh_mean, linewidth=2.5, color='#ff7f0e', label='Estimated adherence (mean)')
-plt.fill_between(t_vals, adh_mean - adh_std, adh_mean + adh_std, color='#ff7f0e', alpha=0.25, label='± 1 std over runs')
+fig, ax = plt.subplots(figsize=FIGURE_SIZE_LINE)
+
+ax.plot(
+    t_vals,
+    adh_mean,
+    color='#ff7f0e',
+    label='Estimated adherence (mean)'
+)
+
+ax.fill_between(
+    t_vals,
+    adh_mean - adh_std,
+    adh_mean + adh_std,
+    color='#ff7f0e',
+    alpha=0.25,
+    label=r'$\pm$ 1 std over runs'
+)
+
 # Horizontal line: true adherence
-plt.hlines(y=adhering_proportion, xmin=t_vals[0], xmax=t_vals[-1],
-            colors='blue', linestyles='--', linewidth=2,
-            label='True adherence')
-plt.xlabel('Time (days)', fontsize=15)
-plt.ylabel('Estimated adherence', fontsize=15)
-plt.title('Cumulative Adherence Estimate', fontsize=17)
-plt.ylim(0, 1.05)
-plt.grid(True, alpha=0.3)
-plt.legend(fontsize=12)
+ax.hlines(
+    y=adhering_proportion,
+    xmin=t_vals[0],
+    xmax=t_vals[-1],
+    colors='blue',
+    linestyles='--',
+    label='True adherence'
+)
+
+ax.set_xlabel('Time (days)')
+ax.set_ylabel('Estimated adherence')
+ax.set_title('Cumulative Adherence Estimate')
+ax.set_ylim(0, 1.05)
+ax.legend()
+ax.grid(True)
+
 plt.tight_layout()
-plt.show()
+plt.savefig('result_figures/cumulative_adherence.pdf', bbox_inches='tight')
+plt.close()
+
 
 # ---------------------------
 # Save results to PKL

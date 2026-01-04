@@ -9,6 +9,7 @@ import random
 import os
 import sys
 import pickle as pkl
+import ast
 
 #----------
 #
@@ -26,13 +27,15 @@ n = 200  # number of nodes
 p = 0.05  # probability of edge
 
 load_initial = False  # Set to True if you want to existing epidemic states from pickle file
-clear = False  # Set clear to True if you want to use a new network or clear data files. False if you want to keep the existing one.
+clear = True  # Set clear to True if you want to use a new network or clear data files. False if you want to keep the existing one.
 verbose = True  # Set verbose to True if you want to see detailed output during optimization
 mode = None  # "standard" or "adherence" or "YJMOB" or "sensitivity analysis"
-if len(sys.argv) == 2:
+if sys.argv[-1] == "yjmob mode":
     mode = "YJMOB"
-elif len(sys.argv) == 3:
+elif sys.argv[-1] == "adherence mode":
     mode = "adherence"
+elif sys.argv[-1] == "sensitivity analysis mode":
+    mode = "sensitivity analysis"
 
 file_index = None  # Used for reading from network files, choosing write file names
 # Form: python mean_field_approx.py <file index>
@@ -54,8 +57,10 @@ if mode == "adherence":
     write_file = sys.argv[1]
 elif mode == "YJMOB":
     write_file = f"experiment_data/yjmob{file_index}_runs.txt"
+elif mode == "sensitivity analysis":
+    write_file = sys.argv[3]
 
-adherence = 0.6 # Proportion of individuals who sever contact edges upon infection
+adherence = 0.0 # Proportion of individuals who sever contact edges upon infection
 # Overwrite adherence if provided as command line argument
 if mode == "adherence":
     adherence = float(sys.argv[2])
@@ -81,11 +86,11 @@ if load_initial == True:
         adhering = None
 
 # Simulation parameters
-T = 200
+T = 100
 beta = 0.15  # Infection rate
 gamma = 0.07  # Recovery rate
-mu = 0.10  # Immunity loss rate
-init = 0.15 # Initial infected portion
+mu = 0.03  # Immunity loss rate
+init = 0.05 # Initial infected portion
 q = "r"  # Quarantine type: indiviuals restore edges when recovered
 split_point = 30  # Set to None if you want to optimize over the full SIR simulation, or a specific time point to split the optimization
 density_social = None  # Set to None for default density, or an integer number of edges in the social graph
@@ -98,16 +103,22 @@ if mode == "YJMOB":
     if file_index <= 1:
         adherence = 0.0
     elif file_index == 2:
-        adherence = 0.6
+        adherence = 0.6  # Proceed with partial adherence
     # Overwrite with static adhering list past this point,
     #  as they've been determined in file_index 2 run
     else:
         adherence = adhering
 
+# Overwrite parameters if provided as command line arguments for sensitivity analysis
+elif mode == "sensitivity analysis":
+    print(sys.argv[1])
+    seeds = ast.literal_eval(sys.argv[1])
+    beta = float(sys.argv[2])
+    split_point = None  # No split for sensitivity analysis
+
 # Clear data files
 def truncate_files():
-    files_to_truncate = ["experiment_data/mfa_contact.gml", "experiment_data/mfa_social.gml", 
-                         write_file]
+    files_to_truncate = ["experiment_data/mfa_contact.gml", "experiment_data/mfa_social.gml", write_file]
     for file in files_to_truncate:
         if os.path.exists(file):
             with open(file, 'w') as f:
@@ -155,13 +166,16 @@ except (FileNotFoundError, OSError, ValueError, nx.NetworkXError) as e:
 
     contact_graph = nx.erdos_renyi_graph(n, p, seed=42)
     social_graph = correlated_graphs.create_social_graph(contact_graph, nE=density_social)[0]
-    # social_graph = nx.erdos_renyi_graph(n, p, seed=24, directed=True)
 
     # Read seed set from mfa_seeds.npy if it exists
     try:
         seeds = np.load("experiment_data/mfa_seeds.npy").tolist() if seeds is None else seeds
     except (FileNotFoundError, OSError, ValueError) as e:
         seeds = None
+
+    # Convert node labels from strings to integers
+    contact_graph = nx.relabel_nodes(contact_graph, lambda x: int(x))
+    social_graph = nx.relabel_nodes(social_graph, lambda x: int(x))
 
     nx.write_gml(contact_graph, "experiment_data/mfa_contact.gml")
     nx.write_gml(social_graph, "experiment_data/mfa_social.gml")
@@ -357,7 +371,7 @@ def drive_optimizer(split_point=None):
 #
 #-------------
 
-# Save to mfa_xy_data.txt
+# Save to write_file
 # This is for single runs under a given SIR configuration
 # Split: Tuple (split_point, half), where split_point is the time to split the optimization, and half is either 1 or 2
 def save_xy_data(dynamic_deg=None, w1_avg=None, w2_avg=None, w1_all_runs=None, split=None):

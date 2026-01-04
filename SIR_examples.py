@@ -29,8 +29,8 @@ T = 100
 
 beta = 0.15
 gamma = 0.07
-mu = 0.10
-init = 0.15
+mu = 0.03
+init = 0.05
 
 contact_network = nx.erdos_renyi_graph(n=n, p=0.05, seed=42)
 n_contact = contact_network.number_of_nodes()
@@ -91,7 +91,7 @@ def informed_vs_noninformed(plot_data=False):
         ax.grid(True)
 
         plt.tight_layout()
-        plt.savefig('experiment_data/informed_vs_noninformed.pdf', bbox_inches='tight')
+        plt.savefig('result_figures/informed_vs_noninformed.pdf', bbox_inches='tight')
         plt.close()
 
     return (x, mean_inf, std_inf), (x, mean_noninf, std_noninf)
@@ -151,7 +151,7 @@ def const_quarantines(plot_data=False):
         ax.grid(True)
 
         plt.tight_layout()
-        plt.savefig('experiment_data/const_quarantines.pdf', bbox_inches='tight')
+        plt.savefig('result_figures/const_quarantines.pdf', bbox_inches='tight')
         plt.close()
 
     return (x, mean_q, std_q), (x, mean_noq, std_noq)
@@ -210,7 +210,7 @@ def normal_dist_quarantines(plot_data=False):
         ax.grid(True)
 
         plt.tight_layout()
-        plt.savefig('experiment_data/normal_dist_quarantines.pdf', bbox_inches='tight')
+        plt.savefig('result_figures/normal_dist_quarantines.pdf', bbox_inches='tight')
         plt.close()
 
     return (x, mean_norm, std_norm), (x, mean_noq, std_noq)
@@ -272,7 +272,7 @@ def jaccard_similarity(num_runs=20, bins=10, plot_data=False):
         ax.grid(axis="y", linestyle="--", alpha=0.4)
 
         plt.tight_layout()
-        plt.savefig('experiment_data/jaccard_similarity.pdf', bbox_inches='tight')
+        plt.savefig('result_figures/jaccard_similarity.pdf', bbox_inches='tight')
         plt.close()
 
     return df, bin_means
@@ -292,9 +292,9 @@ def random_vs_nonrandom_seeds(num_comparisons, plot_data=False):
     ]
 
     non_random_seeds = find_seeds.find_seed_set(
-        deepcopy(contact_network),
+        social_graph=deepcopy(contact_network),
         num_seeds=num_comparisons,
-        exponent=20
+        exponent=20 # Strictly degree-based
     )
 
     for i in range(1, num_comparisons + 1):
@@ -308,7 +308,7 @@ def random_vs_nonrandom_seeds(num_comparisons, plot_data=False):
                 gamma=gamma,
                 mu=mu,
                 init=init,
-                q="r",
+                q=100,
                 adherence=1.0,
                 seeds=random_seeds[:i]
             )[2]
@@ -326,7 +326,7 @@ def random_vs_nonrandom_seeds(num_comparisons, plot_data=False):
                 gamma=gamma,
                 mu=mu,
                 init=init,
-                q="r",
+                q=100,
                 adherence=1.0,
                 seeds=non_random_seeds[:i]
             )[2]
@@ -396,7 +396,7 @@ def random_vs_nonrandom_seeds(num_comparisons, plot_data=False):
         ax.grid(axis="y", linestyle="--", alpha=0.6)
 
         plt.tight_layout()
-        plt.savefig('experiment_data/random_vs_nonrandom_seeds.pdf', bbox_inches='tight')
+        plt.savefig('result_figures/random_vs_nonrandom_seeds.pdf', bbox_inches='tight')
         plt.close()
 
     return (
@@ -454,7 +454,7 @@ def compare_infections_adherence(adherence, plot_data=False):
         ax.grid(True)
 
         plt.tight_layout()
-        plt.savefig('experiment_data/compare_infections_adherence.pdf', bbox_inches='tight')
+        plt.savefig('result_figures/compare_infections_adherence.pdf', bbox_inches='tight')
         plt.close()
 
     return (x, mean_full, std_full), (x, mean_partial, std_partial)
@@ -465,8 +465,6 @@ def r_quarantine(plot_data=False):
     T_runs = []
     Y_runs_r_quarantine = []
     Y_runs_noquarantine = []
-
-    adherence = 1.0
 
     for _ in range(num_trials):
         data1 = SIR.Simulate_SIR(
@@ -513,7 +511,7 @@ def r_quarantine(plot_data=False):
         ax.grid(True)
 
         plt.tight_layout()
-        plt.savefig('experiment_data/r_quarantine.pdf', bbox_inches='tight')
+        plt.savefig('result_figures/r_quarantine.pdf', bbox_inches='tight')
         plt.close()
 
     return (x, mean_rq, std_rq), (x, mean_noq, std_noq)
@@ -567,7 +565,7 @@ def permanent_quarantine(plot_data=False):
         ax.grid(True)
 
         plt.tight_layout()
-        plt.savefig('experiment_data/permanent_quarantine.pdf', bbox_inches='tight')
+        plt.savefig('result_figures/permanent_quarantine.pdf', bbox_inches='tight')
         plt.close()
 
     return (x, mean_q, std_q), (x, mean_noq, std_noq)
@@ -603,7 +601,7 @@ def plot_all_quarantine():
     ax.grid(True, linestyle='--', alpha=0.5)
 
     plt.tight_layout()
-    plt.savefig('experiment_data/all_quarantine_strategies.pdf', bbox_inches='tight')
+    plt.savefig('result_figures/all_quarantine_strategies.pdf', bbox_inches='tight')
     plt.close()
 
     return results
@@ -643,6 +641,11 @@ def pickle_load(filename='experiment_data/pickles.pkl'):
 
     print(data)
 
-# plot_all_quarantine()
-random_vs_nonrandom_seeds(3, plot_data=True)
-# jaccard_similarity(plot_data=True)
+if __name__ == "__main__":
+    random_vs_nonrandom_seeds(4, plot_data=True)
+    plot_all_quarantine()
+    # r_quarantine(plot_data=True)
+    # const_quarantines(plot_data=True)
+    # permanent_quarantine(plot_data=True)
+    # random_vs_nonrandom_seeds(3, plot_data=True)
+    # jaccard_similarity(plot_data=True)
