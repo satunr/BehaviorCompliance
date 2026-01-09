@@ -124,6 +124,9 @@ ax.grid(True, alpha=0.3)
 plt.tight_layout()
 
 plt.savefig("result_figures/mfa_degree_estimates.pdf", format="pdf", bbox_inches="tight")
+
+plt.show()
+
 plt.close(fig)
 
 # ---------------------------
@@ -143,8 +146,8 @@ save_dict = {
     "pre_std": pre_std.tolist(),
     "post_mean": post_mean.tolist(),
     "post_std": post_std.tolist(),
-    "pre_all_runs": [run.tolist() for run in pre["w1 all runs"]["y"]],
-    "post_all_runs": [run.tolist() for run in post["w1 all runs"]["y"]]
+    # "pre_all_runs": [run.tolist() for run in pre["w1 all runs"]["y"]],
+    # "post_all_runs": [run.tolist() for run in post["w1 all runs"]["y"]]
 }
 
 # Safe write

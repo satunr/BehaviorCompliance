@@ -27,7 +27,7 @@ n = 200  # number of nodes
 p = 0.05  # probability of edge
 
 load_initial = False  # Set to True if you want to existing epidemic states from pickle file
-clear = True  # Set clear to True if you want to use a new network or clear data files. False if you want to keep the existing one.
+clear = False  # Set clear to True if you want to use a new network or clear data files. False if you want to keep the existing one.
 verbose = True  # Set verbose to True if you want to see detailed output during optimization
 mode = None  # "standard" or "adherence" or "YJMOB" or "sensitivity analysis"
 if sys.argv[-1] == "yjmob mode":
@@ -86,13 +86,13 @@ if load_initial == True:
         adhering = None
 
 # Simulation parameters
-T = 100
+T = 30
 beta = 0.15  # Infection rate
 gamma = 0.07  # Recovery rate
-mu = 0.03  # Immunity loss rate
+mu = 0.05  # Immunity loss rate
 init = 0.05 # Initial infected portion
 q = "r"  # Quarantine type: indiviuals restore edges when recovered
-split_point = 30  # Set to None if you want to optimize over the full SIR simulation, or a specific time point to split the optimization
+split_point = None  # Set to None if you want to optimize over the full SIR simulation, or a specific time point to split the optimization
 density_social = None  # Set to None for default density, or an integer number of edges in the social graph
 
 if mode == "YJMOB":
@@ -112,9 +112,9 @@ if mode == "YJMOB":
 # Overwrite parameters if provided as command line arguments for sensitivity analysis
 elif mode == "sensitivity analysis":
     print(sys.argv[1])
-    seeds = ast.literal_eval(sys.argv[1])
-    beta = float(sys.argv[2])
-    split_point = None  # No split for sensitivity analysis
+    seeds = ast.literal_eval(sys.argv[1])  # List of seed nodes
+    init = float(sys.argv[2])  # Initial infected proportion
+    split_point = None  # No split for sensitivity analysis. Only care about pre-quarantine
 
 # Clear data files
 def truncate_files():
@@ -153,6 +153,9 @@ try:
 
         # Find seed set so we have less variability in the simulation
         seeds = find_seeds.find_seed_set(contact_graph, 10, 2) if seeds is None else seeds
+
+        # Convert from numpy string array to list of integers
+        seeds = [int(x) for x in seeds]
 
         # Write seeds to mfa_seeds.npy
         np.save("experiment_data/mfa_seeds.npy", np.array(seeds))

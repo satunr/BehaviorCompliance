@@ -124,14 +124,14 @@ def plot_groups_by_adherence(show=False):
     ax.set_ylim(0, 1.02)
     ax.grid(alpha=0.3)
 
-    # ax.legend(
-    #     handles=legend_handles,
-    #     labels=legend_labels,
-    #     ncol=3,
-    #     loc="lower center",
-    #     bbox_to_anchor=(0.5, -0.28),
-    #     frameon=True
-    # )
+    ax.legend(
+        handles=legend_handles,
+        labels=legend_labels,
+        ncol=3,
+        loc="lower center",
+        bbox_to_anchor=(0.5, -0.28),
+        frameon=True
+    )
 
     fig.tight_layout()
     fig.savefig(FIG_GROUPED_PDF, format="pdf", bbox_inches="tight")
@@ -150,43 +150,69 @@ def plot_groups_by_adherence(show=False):
 # ============================================================
 
 def plot_one_adherence_group(samples, show=False):
-
     if not samples:
         return
 
     n = samples[0]['Number of nodes']
-    T = len(samples[0]['SIR Infections']['y'])
-    split_point = int(samples[0]['Informed']['x'][0])
-    t = split_point + np.arange(T)
+    split_point = int(samples[1]['Informed']['x'][0])  # Quarantine start index
 
-    infected_arr = np.vstack([s['SIR Infections']['y'] for s in samples]) / n
-    informed_arr = np.vstack([s['Informed']['y'] for s in samples]) / n
-    inf_inf_arr  = np.vstack([s['Informed and Infected']['y'] for s in samples]) / n
+    # Separate even (pre-quarantine) and odd (post-quarantine) samples
+    pre_samples  = [samples[i] for i in range(len(samples)) if i % 2 == 0]
+    post_samples = [samples[i] for i in range(len(samples)) if i % 2 == 1]
+
+    # Determine consistent lengths
+    T_pre  = min(len(s['SIR Infections']['y']) for s in pre_samples)
+    T_post = min(len(s['SIR Infections']['y']) for s in post_samples)
+
+    # Time vectors
+    t_pre  = np.arange(T_pre)
+    t_post = T_pre + np.arange(T_post) 
+
+    # Flatten pre- and post-quarantine separately
+    def stack_samples(arr_name, group, length):
+        return np.vstack([s[arr_name]['y'][:length] for s in group]) / n
+
+    infected_pre = stack_samples('SIR Infections', pre_samples, T_pre)
+    infected_post = stack_samples('SIR Infections', post_samples, T_post)
+
+    informed_pre = stack_samples('Informed', pre_samples, T_pre)
+    informed_post = stack_samples('Informed', post_samples, T_post)
+
+    inf_inf_pre = stack_samples('Informed and Infected', pre_samples, T_pre)
+    inf_inf_post = stack_samples('Informed and Infected', post_samples, T_post)
+
+    # Combine pre- and post- arrays for plotting
+    t = np.concatenate([t_pre, t_post])
+    infected_arr = np.concatenate([infected_pre.mean(0), infected_post.mean(0)])
+    informed_arr = np.concatenate([informed_pre.mean(0), informed_post.mean(0)])
+    inf_inf_arr  = np.concatenate([inf_inf_pre.mean(0), inf_inf_post.mean(0)])
+
+    # For std bands
+    infected_std = np.concatenate([infected_pre.std(0), infected_post.std(0)])
+    informed_std = np.concatenate([informed_pre.std(0), informed_post.std(0)])
+    inf_inf_std  = np.concatenate([inf_inf_pre.std(0), inf_inf_post.std(0)])
 
     fig, ax = plt.subplots(figsize=(13, 8))
 
-    # Title
-    ax.set_title(f"Quarantine Dynamics Under Full Adherence")
-
+    # Plotting helper
     def plot_band(mean, std, label, color):
         ax.plot(t, mean, label=label, color=color)
         ax.fill_between(t, mean - std, mean + std, color=color, alpha=0.22)
 
-    # plot_band(informed_arr.mean(0), informed_arr.std(0), "Informed", "#2ca02c")
-    # plot_band(inf_inf_arr.mean(0), inf_inf_arr.std(0), "Informed & Infected", "#ff7f0e")
-    # plot_band(infected_arr.mean(0), infected_arr.std(0), "Infected", "#d62728")
+    plot_band(informed_arr, informed_std, "Informed", "#2ca02c")
+    plot_band(inf_inf_arr, inf_inf_std, "Informed & Infected", "#ff7f0e")
+    plot_band(infected_arr, infected_std, "Infected", "#d62728")
 
-    ax.set_xlabel("Time")
+    # Vertical dotted line at quarantine start
+    ax.axvline(split_point, color='k', linestyle=':', linewidth=2, label="Quarantine Start")
+
+    ax.set_xlabel("Time (days)")
     ax.set_ylabel("Fraction of population")
     ax.set_ylim(0, 1.02)
     ax.grid(alpha=0.3)
 
-    # ax.legend(
-    #     loc="upper center",
-    #     bbox_to_anchor=(0.5, -0.12),
-    #     ncol=3,
-    #     frameon=True
-    # )
+    # Inset legend
+    ax.legend(loc='upper left', fontsize=14, frameon=True)
 
     fig.tight_layout()
     fig.savefig(FIG_SINGLE_PDF, format="pdf", bbox_inches="tight")
@@ -196,3 +222,9 @@ def plot_one_adherence_group(samples, show=False):
         plt.show()
 
     print(f"Saved single adherence figure → {FIG_SINGLE_PDF}")
+
+
+if __name__ == "__main__":
+    read_file = "experiment_data/mfa_xy_data.txt"
+    samples = extract_mfa.parse_sample_data(read_file)
+    plot_one_adherence_group(samples, show=True)

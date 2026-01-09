@@ -345,14 +345,14 @@ save_dict = {
     "population": int(n),
     "num_simulations": int(num_runs),
     "time_after_q": int(T_post),
-    "i_prime_mean": i_prime_mean.tolist(),
-    "inf_inf_runs": [run.tolist() for run in inf_inf_runs],
-    "k_q_true_mean": k_q_true_mean.tolist(),
-    "k_q_true_runs": [run.tolist() for run in k_q_runs],
-    "cumulative_adh_runs": cumulative_adh.tolist(),
-    "cumulative_adh_mean": adh_mean.tolist(),
-    "cumulative_adh_std": adh_std.tolist(),
-    "t_vals": t_vals.tolist()
+    # "i_prime_mean": i_prime_mean.tolist(),
+    # "inf_inf_runs": [run.tolist() for run in inf_inf_runs],
+    # "k_q_true_mean": k_q_true_mean.tolist(),
+    # "k_q_true_runs": [run.tolist() for run in k_q_runs],
+    # "cumulative_adh_runs": cumulative_adh.tolist(),
+    # "cumulative_adh_mean": adh_mean.tolist(),
+    # "cumulative_adh_std": adh_std.tolist(),
+    # "t_vals": t_vals.tolist()
 }
 
 # safe write

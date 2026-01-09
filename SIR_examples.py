@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 import random
 import find_seeds
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes, mark_inset, zoomed_inset_axes
+
 
 # Global matplotlib settings for publication-quality figures
 plt.rcParams.update({
@@ -27,10 +29,10 @@ FIGURE_SIZE_BAR = (14, 8)
 n = 200
 T = 100
 
-beta = 0.15
-gamma = 0.07
-mu = 0.03
-init = 0.05
+beta = 0.15 # Infection rate
+gamma = 0.07 # Recovery rate
+mu = 0.05 # Immunity loss rate
+init = 0.05 # Initial infected portion
 
 contact_network = nx.erdos_renyi_graph(n=n, p=0.05, seed=42)
 n_contact = contact_network.number_of_nodes()
@@ -84,7 +86,7 @@ def informed_vs_noninformed(plot_data=False):
         ax.plot(x, mean_noninf, label='Without quarantine', color='red')
         ax.fill_between(x, mean_noninf - std_noninf, mean_noninf + std_noninf, color='red', alpha=0.3)
 
-        ax.set_xlabel('Time')
+        ax.set_xlabel('Time (days)')
         ax.set_ylabel('# of Infected')
         ax.set_title('SIR with Permanent Quarantine')
         ax.legend()
@@ -144,7 +146,7 @@ def const_quarantines(plot_data=False):
         ax.plot(x, mean_noq, label='Without quarantine', color='red')
         ax.fill_between(x, mean_noq - std_noq, mean_noq + std_noq, color='red', alpha=0.3)
 
-        ax.set_xlabel('Time')
+        ax.set_xlabel('Time (days)')
         ax.set_ylabel('# of Infected')
         ax.set_title('SIR with Constant Quarantine')
         ax.legend()
@@ -203,7 +205,7 @@ def normal_dist_quarantines(plot_data=False):
         ax.plot(x, mean_noq, label='Without Quarantine', color='red')
         ax.fill_between(x, mean_noq - std_noq, mean_noq + std_noq, color='red', alpha=0.3)
 
-        ax.set_xlabel('Time')
+        ax.set_xlabel('Time (days)')
         ax.set_ylabel('# of Infected')
         ax.set_title('SIR with Normally Distributed Quarantine')
         ax.legend()
@@ -278,7 +280,7 @@ def jaccard_similarity(num_runs=20, bins=10, plot_data=False):
     return df, bin_means
 
 def random_vs_nonrandom_seeds(num_comparisons, plot_data=False):
-    num_trials = 25
+    num_trials = 50
 
     infections_random = []
     infections_nonrandom = []
@@ -389,7 +391,7 @@ def random_vs_nonrandom_seeds(num_comparisons, plot_data=False):
         ax.set_ylim(y_min - 1, y_max + 1)
 
         ax.set_xlabel("Number of Seeds")
-        ax.set_ylabel("Average # of Infected")
+        ax.set_ylabel("# of Infected")
         ax.set_title("Random vs Degree-Based Seed Selection")
 
         ax.legend(frameon=False)
@@ -447,7 +449,7 @@ def compare_infections_adherence(adherence, plot_data=False):
         ax.plot(x, mean_partial, label='With partial adherence', color='red')
         ax.fill_between(x, mean_partial - std_partial, mean_partial + std_partial, color='red', alpha=0.3)
 
-        ax.set_xlabel('Time')
+        ax.set_xlabel('Time (days)')
         ax.set_ylabel('# of Infected')
         ax.set_title('SIR with Constant Quarantine')
         ax.legend()
@@ -504,7 +506,7 @@ def r_quarantine(plot_data=False):
         ax.plot(x, mean_noq, label='Without quarantine', color='red')
         ax.fill_between(x, mean_noq - std_noq, mean_noq + std_noq, color='red', alpha=0.3)
 
-        ax.set_xlabel('Time')
+        ax.set_xlabel('Time (days)')
         ax.set_ylabel('# of Infected')
         ax.set_title('SIR with Quarantine Until Recovery')
         ax.legend()
@@ -518,7 +520,6 @@ def r_quarantine(plot_data=False):
 
 def permanent_quarantine(plot_data=False):
     num_trials = 25
-    adherence = 1.0
 
     T_runs = []
     Y_runs_quarantine = []
@@ -530,7 +531,7 @@ def permanent_quarantine(plot_data=False):
             social_network=deepcopy(social_network),
             T=T, 
             beta=beta, gamma=gamma, mu=mu, init=init,
-             q=T, adherence=adherence
+             q=T, adherence=1.0
         )[2]
         T_runs.append(data1[0])
         Y_runs_quarantine.append(data1[1])
@@ -558,7 +559,7 @@ def permanent_quarantine(plot_data=False):
         ax.fill_between(x, mean_q - std_q, mean_q + std_q, color='blue', alpha=0.3)
         ax.plot(x, mean_noq, label='Without quarantine', color='red')
         ax.fill_between(x, mean_noq - std_noq, mean_noq + std_noq, color='red', alpha=0.3)
-        ax.set_xlabel('Time')
+        ax.set_xlabel('Time (days)')
         ax.set_ylabel('# of Infected')
         ax.set_title('SIR with Permanent Quarantine')
         ax.legend()
@@ -571,33 +572,47 @@ def permanent_quarantine(plot_data=False):
     return (x, mean_q, std_q), (x, mean_noq, std_noq)
 
 def plot_all_quarantine():
-    constant_quarantine_data = const_quarantines()
-    data_const = constant_quarantine_data[0]
-    data_noq = constant_quarantine_data[1]
-    data_normal = normal_dist_quarantines()[0]
-    data_perm = permanent_quarantine()[0]
+    # --- Load data ---
+    data_perm, data_noq = permanent_quarantine()
+    data_gauss, _ = normal_dist_quarantines()
 
-    x = data_noq[0]
+    # Convert x to numpy array (all x are the same)
+    x = np.array(data_noq[0])
 
+    # Store results: (mean_vals, std_vals)
     results = {
-        "No Quarantine": data_noq[1:],
-        "Constant Quarantine": data_const[1:],
-        "Normal Dist. Quarantine": data_normal[1:],
-        "Permanent Quarantine": data_perm[1:]
+        "No Quarantine": (np.array(data_noq[1]), np.array(data_noq[2])),
+        "Permanent Quarantine": (np.array(data_perm[1]), np.array(data_perm[2])),
+        "Gaussian Quarantine": (np.array(data_gauss[1]), np.array(data_gauss[2])),
     }
 
-    colors = ['blue', 'green', 'orange', 'purple']
+    colors = ['blue', 'green', 'purple']
 
     fig, ax = plt.subplots(figsize=FIGURE_SIZE_LINE)
 
+    # --- Plot main curves ---
     for i, (label, (mean_vals, std_vals)) in enumerate(results.items()):
-        ax.plot(x, mean_vals, label=label, color=colors[i])
-        ax.fill_between(x, mean_vals - std_vals, mean_vals + std_vals, color=colors[i], alpha=0.3)
+        mean_vals = np.array(mean_vals)
+        std_vals = np.array(std_vals)
 
-    ax.set_xlabel("Time")
+        ax.plot(x, mean_vals, label=label, color=colors[i])
+        ax.fill_between(
+            x,
+            mean_vals - std_vals,
+            mean_vals + std_vals,
+            color=colors[i],
+            alpha=0.3
+        )
+
+    # --- Main plot labels ---
+    ax.set_xlabel("Time (days)")
     ax.set_ylabel("# of Infected")
-    ax.set_title("SIR Infections Under Different Quarantine Strategies")
-    ax.legend(frameon=False)
+    ax.set_title("SIRS Infections Under Different Quarantine Strategies")
+
+    ax.legend(
+        loc="upper right",
+    )
+
     ax.grid(True, linestyle='--', alpha=0.5)
 
     plt.tight_layout()
@@ -642,8 +657,8 @@ def pickle_load(filename='experiment_data/pickles.pkl'):
     print(data)
 
 if __name__ == "__main__":
-    random_vs_nonrandom_seeds(4, plot_data=True)
     plot_all_quarantine()
+    # random_vs_nonrandom_seeds(4, plot_data=True)
     # r_quarantine(plot_data=True)
     # const_quarantines(plot_data=True)
     # permanent_quarantine(plot_data=True)

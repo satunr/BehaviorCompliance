@@ -54,7 +54,7 @@ def plot_optimizer_results(samples, even_or_odd):
         # --- Plot estimate & retrieve its color ---
         line = plt.plot(
             time_points, mean_w1,
-            label=f'(β = {0.15 - 0.03 * i})'
+            label=f'(β = {0.15 - 0.015 * i})'
         )[0]
 
         color = line.get_color()
@@ -85,7 +85,7 @@ def plot_optimizer_results(samples, even_or_odd):
             "true_val": true_val,
         })
 
-    plt.xlabel('Time')
+    plt.xlabel('Time (days)')
     plt.ylabel('Degree Estimate from Optimizer')
     # --- Set title based on whether the optimization was for <k_0> or <k_q> ---
     if even_or_odd == 0:

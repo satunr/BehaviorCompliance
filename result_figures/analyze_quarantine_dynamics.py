@@ -26,8 +26,8 @@ plt.rcParams.update({
 FIGURE_SIZE_LINE = (10, 6)
 FIGURE_SIZE_BAR = (14, 8)
 
-# read_file = "experiment_data/mfa_xy_data.txt"
-read_file = ("experiment_data/a_1.0")
+read_file = "experiment_data/mfa_xy_data.txt"
+# read_file = ("experiment_data/a_1.0")
 # ---------------------------
 #  Load samples
 # ---------------------------
@@ -218,10 +218,12 @@ ax.set_xlabel('Time (days)')
 ax.set_ylabel(r'$\langle k_q \rangle$')
 ax.set_title(r'$\langle k_q \rangle$ Parameter Optimization vs Ground Truth')
 ax.legend()
-ax.grid(True)
+ax.grid(True, linestyle='--', alpha=0.5)
 
 plt.tight_layout()
 plt.savefig('result_figures/kq_true_vs_estimated.pdf', bbox_inches='tight')
+plt.show()
+
 plt.close()
 
 # ---------------------------
@@ -302,10 +304,12 @@ ax.set_ylabel('Estimated adherence')
 ax.set_title('Cumulative Adherence Estimate')
 ax.set_ylim(0, 1.05)
 ax.legend()
-ax.grid(True)
+ax.grid(True, linestyle='--', alpha=0.5)
 
 plt.tight_layout()
 plt.savefig('result_figures/cumulative_adherence.pdf', bbox_inches='tight')
+plt.show()
+
 plt.close()
 
 
