@@ -30,14 +30,15 @@ def simple_repeat():
 def yjmob_mode():
     files_to_clear = ["experiment_data/yjmob0_runs.txt", "experiment_data/yjmob1_runs.txt",
                       "experiment_data/yjmob2_runs.txt", "experiment_data/yjmob3_runs.txt",
-                      "experiment_data/yjmob4_runs.txt"]
+                      "experiment_data/yjmob4_runs.txt", "experiment_data/yjmob5_runs.txt"
+                      ]
     
     for file in files_to_clear:
         open(file, "w").close()
 
     for _ in range(repeat):
         # File index: correspond to different time intervals in YJMob dataset
-        for file_index in range(5):
+        for file_index in range(6):
             subprocess.run([sys.executable, "mean_field_approx.py", 
                             str(file_index), "yjmob mode"])
             
@@ -121,6 +122,6 @@ def sensitivity_analysis():
 
 if __name__ == "__main__":
     # adherence_mode()
-    # yjmob_mode()
-    sensitivity_analysis()
+    yjmob_mode()
+    # sensitivity_analysis()
     # simple_repeat()

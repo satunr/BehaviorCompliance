@@ -26,6 +26,8 @@ network1_samples = extract_mfa.parse_sample_data("experiment_data/yjmob1_runs.tx
 network2_samples = extract_mfa.parse_sample_data("experiment_data/yjmob2_runs.txt")
 network3_samples = extract_mfa.parse_sample_data("experiment_data/yjmob3_runs.txt")
 network4_samples = extract_mfa.parse_sample_data("experiment_data/yjmob4_runs.txt")
+# File for optimization over all intervals together (with split point for quarantine beginning)
+yjmob_full_samples = extract_mfa.parse_sample_data("experiment_data/yjmob5_runs.txt")
 
 all_samples = [network0_samples, network1_samples, network2_samples, network3_samples, network4_samples]
 
@@ -62,38 +64,8 @@ k_q_std = np.std(np.array(k_q_runs), axis=0)
 i_prime_mean = np.mean(np.array(inf_inf_runs), axis=0)
 i_prime_std = np.std(np.array(inf_inf_runs), axis=0)
 
-# Plot k_q with mean and std bands
-fig, ax = plt.subplots(figsize=FIGURE_SIZE_LINE)
-ax.plot(range(len(k_q_true_mean)), k_q_true_mean, color='#ff7f0e', label='Mean estimated ⟨k_q⟩')
-ax.fill_between(range(len(k_q_true_mean)),
-                k_q_true_mean - k_q_std,
-                k_q_true_mean + k_q_std,
-                color='#ff7f0e', alpha=0.25, label='± 1 std over runs')
-ax.set_xlabel('Time (days)', fontsize=15)
-ax.set_ylabel(r'$\langle k \rangle$', fontsize=15)
-ax.set_title('True Degree After Quarantine', fontsize=17)
-ax.legend(fontsize=12)
-ax.grid(True, alpha=0.3)
-plt.tight_layout()
-# plt.show()
-
-# Plot infected & informed with mean and std bands
-fig, ax = plt.subplots(figsize=FIGURE_SIZE_LINE)
-ax.plot(range(len(i_prime_mean)), i_prime_mean, color='blue', label='Mean Informed & Infected')
-ax.fill_between(range(len(i_prime_mean)),
-                i_prime_mean - i_prime_std,
-                i_prime_mean + i_prime_std,
-                color='blue', alpha=0.25, label='± 1 std over runs')
-ax.set_xlabel('Time (days)', fontsize=15)
-ax.set_ylabel('Fraction Informed & Infected', fontsize=15)
-ax.set_title('Informed and Infected Ratio Post-Quarantine', fontsize=17)
-ax.legend(fontsize=12)
-ax.grid(True, alpha=0.3)
-plt.tight_layout()
-# plt.show()
-
 def plot_mfa_estimated_degree():
-    # Temp. Shorten all to just the first sample for plotting
+    # Use first SIR realization only; variance comes from optimizer runs
     plotting_samples = [sample[0] for sample in all_samples]
 
     # ============================
@@ -114,18 +86,19 @@ def plot_mfa_estimated_degree():
     # ============================
     fig, ax = plt.subplots(figsize=(14, 8))
 
-    # Store per-interval true means
+    # ----------------------------
+    # TRUE mean degree (piecewise)
+    # ----------------------------
     true_interval_means = []
 
-    # --- Plot TRUE mean degree for each individual 15-day interval ---
     for i, sample in enumerate(plotting_samples):
         x_local, _, y_true_local = align_true_to_est(sample)
+
+        # interval-local → global time
         t_global = x_local + i * days_per_sample
 
-        # Save mean of this interval
         true_interval_means.append(y_true_local.mean())
 
-        # DOTTED short horizontal ground-truth lines
         ax.plot(
             t_global,
             y_true_local,
@@ -134,17 +107,17 @@ def plot_mfa_estimated_degree():
             linewidth=3
         )
 
-    # --- Compute pre/post quarantine ground-truth means ---
+    # ----------------------------
+    # TRUE pre/post-quarantine means
+    # ----------------------------
     pre_quarantine_mean = np.mean(true_interval_means[:2])
     post_quarantine_mean = np.mean(true_interval_means[2:])
 
-    # --- Draw solid horizontal mean lines ---
     ax.hlines(
         pre_quarantine_mean,
         xmin=0,
         xmax=2 * days_per_sample,
         colors="black",
-        linestyles="-",
         linewidth=4
     )
 
@@ -153,29 +126,30 @@ def plot_mfa_estimated_degree():
         xmin=2 * days_per_sample,
         xmax=5 * days_per_sample,
         colors="black",
-        linestyles="-",
         linewidth=4
     )
 
-    # --- Compute and plot ESTIMATED mean degree ---
+    # ----------------------------
+    # ESTIMATED mean degree (piecewise)
+    # ----------------------------
     for i, sample in enumerate(plotting_samples):
-        x_local, y_est_local, _ = align_true_to_est(sample)
+        x_local, _, _ = align_true_to_est(sample)
         t_global = x_local + i * days_per_sample
 
-        runs_interp_local = []
+        runs_interp = []
         for run_y in sample["w1 all runs"]["y"]:
             run_interp = np.interp(x_local, sample["w1 all runs"]["x"], run_y)
-            runs_interp_local.append(run_interp)
+            runs_interp.append(run_interp)
 
-        runs_array = np.array(runs_interp_local)
-        sample_mean = runs_array.mean(axis=0)
-        sample_std = runs_array.std(axis=0)
+        runs_array = np.array(runs_interp)
+        mean_est = runs_array.mean(axis=0)
+        std_est = runs_array.std(axis=0)
 
         color = "#ff7f0e" if i < 2 else "#d62728"
 
         ax.plot(
             t_global,
-            sample_mean,
+            mean_est,
             color=color,
             linestyle="--",
             linewidth=3,
@@ -185,14 +159,83 @@ def plot_mfa_estimated_degree():
 
         ax.fill_between(
             t_global,
-            sample_mean - sample_std,
-            sample_mean + sample_std,
+            mean_est - std_est,
+            mean_est + std_est,
             color=color,
             alpha=0.25
         )
 
-    # --- Quarantine start marker ---
-    ax.axvline(split_point, color="gray", linestyle="--", linewidth=2, label="Quarantine begins")
+    # ============================
+    # FULL YJMOB optimizations
+    # ============================
+
+    full_pre_color = "#2ca02c"   # green
+    full_post_color = "#9467bd"  # purple
+
+    # --------
+    # Full pre-quarantine (global time already)
+    # --------
+    full_pre = yjmob_full_samples[0]
+
+    x_pre = np.array(full_pre["w1 Estimated"]["x"])
+    runs_pre = np.array(full_pre["w1 all runs"]["y"])
+
+    mean_pre = runs_pre.mean(axis=0)
+    std_pre = runs_pre.std(axis=0)
+
+    ax.plot(
+        x_pre,
+        mean_pre,
+        color=full_pre_color,
+        linewidth=3.5,
+        label="Full optimization (pre-quarantine)"
+    )
+
+    ax.fill_between(
+        x_pre,
+        mean_pre - std_pre,
+        mean_pre + std_pre,
+        color=full_pre_color,
+        alpha=0.20
+    )
+
+    # --------
+    # Full post-quarantine (ALREADY GLOBAL — NO SHIFT)
+    # --------
+    full_post = yjmob_full_samples[1]
+
+    x_post = np.array(full_post["w1 Estimated"]["x"])
+    runs_post = np.array(full_post["w1 all runs"]["y"])
+
+    mean_post = runs_post.mean(axis=0)
+    std_post = runs_post.std(axis=0)
+
+    ax.plot(
+        x_post,
+        mean_post,
+        color=full_post_color,
+        linewidth=3.5,
+        label="Full optimization (post-quarantine)"
+    )
+
+    ax.fill_between(
+        x_post,
+        mean_post - std_post,
+        mean_post + std_post,
+        color=full_post_color,
+        alpha=0.20
+    )
+
+    # ----------------------------
+    # Quarantine marker
+    # ----------------------------
+    ax.axvline(
+        split_point,
+        color="gray",
+        linestyle="--",
+        linewidth=2,
+        label="Quarantine begins"
+    )
 
     # ============================
     # Formatting
@@ -201,9 +244,9 @@ def plot_mfa_estimated_degree():
     ax.set_ylabel("Mean Node Degree ⟨k⟩")
     ax.set_title("Estimated Degree on YJMob100k Dataset")
 
-    ax.legend(frameon=False, loc="upper left")
-    ax.grid(True, alpha=0.3)
     ax.set_xlim(0, 75)
+    ax.grid(True, alpha=0.3)
+    ax.legend(frameon=False, loc="upper left")
 
     plt.tight_layout()
     plt.savefig(
@@ -211,6 +254,7 @@ def plot_mfa_estimated_degree():
         format="pdf",
         bbox_inches="tight"
     )
+    plt.show()
     plt.close(fig)
 
 plot_mfa_estimated_degree()
@@ -330,6 +374,7 @@ plt.savefig(
     format="pdf",
     bbox_inches="tight"
 )
+plt.show()
 
 plt.close(fig)
 

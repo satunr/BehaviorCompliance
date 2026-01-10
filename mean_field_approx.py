@@ -10,6 +10,7 @@ import os
 import sys
 import pickle as pkl
 import ast
+import shelve
 
 #----------
 #
@@ -45,7 +46,7 @@ if mode == "YJMOB":
 
     # For initial interval, we do not load previous states
     # Note: previous states are always saved after each run, and overwrite the existing file
-    if file_index >= 1:
+    if file_index >= 1 and file_index != 5:
         load_initial = True
 
 write_file = "experiment_data/mfa_xy_data.txt"
@@ -86,15 +87,18 @@ if load_initial == True:
         adhering = None
 
 # Simulation parameters
-T = 30
+T = 100
 beta = 0.15  # Infection rate
 gamma = 0.07  # Recovery rate
 mu = 0.05  # Immunity loss rate
 init = 0.05 # Initial infected portion
 q = "r"  # Quarantine type: indiviuals restore edges when recovered
-split_point = None  # Set to None if you want to optimize over the full SIR simulation, or a specific time point to split the optimization
+split_point = 30  # Set to None if you want to optimize over the full SIR simulation, or a specific time point to split the optimization
 density_social = None  # Set to None for default density, or an integer number of edges in the social graph
 
+# YJMOB mode: First, run optimization for each time interval separately
+#             Next, run optimization over the entire time period with split at the QUARANTINE boundary
+#                 This way, we aren't assuming knowledge of exogeneous changes in the underlying contact networks
 if mode == "YJMOB":
     T = 15
     split_point = None
@@ -102,11 +106,13 @@ if mode == "YJMOB":
     # Pre-quarantine
     if file_index <= 1:
         adherence = 0.0
-    elif file_index == 2:
+    # file_index 2 and 5: Simple adherence parameter cases, 
+    #   not based on some previous adhering list
+    elif file_index == 2 or file_index == 5:
         adherence = 0.6  # Proceed with partial adherence
     # Overwrite with static adhering list past this point,
     #  as they've been determined in file_index 2 run
-    else:
+    elif file_index >= 3:
         adherence = adhering
 
 # Overwrite parameters if provided as command line arguments for sensitivity analysis
@@ -141,7 +147,7 @@ try:
         social_graph = nx.read_gml(f"experiment_data/yjmob_social.gml")
 
         # Find initial seed set only for the first post-quarantine interval
-        if file_index == 2:
+        if file_index == 2 or file_index == 5:
             seeds = find_seeds.find_seed_set(contact_graph, 10, 2)
             # Convert from numpy string array to list of integers
             seeds = [int(x) for x in seeds]
@@ -192,6 +198,7 @@ SIR_results = SIR.Simulate_SIR(
 )
 
 true_dynamics = SIR_results[4]
+# Represents true degree over time, to be used in MFA optimization
 deg_lst = SIR_results[6]
 dynamic_deg = deepcopy(deg_lst) 
 informed_and_infected = SIR_results[7]
@@ -211,6 +218,54 @@ with open("experiment_data/mfa_initial_state.pkl", "wb") as f:
         "Adhering": adhering
     }
     pkl.dump(data_to_pickle, f)
+
+# Write SIR results to pickle file for YJMOB full optimization later
+if mode == "YJMOB" and file_index != 5:
+    cur_dynamics = deepcopy(true_dynamics)
+    cur_deg_lst = deepcopy(deg_lst)
+    cur_informed_and_infected = deepcopy(informed_and_infected)
+    cur_informed = deepcopy(informed)
+    cur_adhering = deepcopy(adhering)
+
+    with shelve.open("experiment_data/yjmob_dynamics_shelve") as db:
+        db[f"Interval {file_index}"] = {
+            "True Dynamics": cur_dynamics,
+            "Dynamic Degree": cur_deg_lst,
+            "Informed and Infected": cur_informed_and_infected,
+            "Informed": cur_informed,
+            "Adhering": cur_adhering
+        }
+
+# file_index == 5: Already completed all intervals individually, time to do full optimization
+# Will involve overwriting some existing variables:
+#     Necessary SIR data already obtained from the 5 intervals -> now combine
+if mode == "YJMOB" and file_index == 5:
+    split_point = 30
+    T = 75
+
+    # Extract true_dynamics, dynamic_deg from all intervals into single list
+    # Overwrite whatever they were previously
+    true_dynamics = []
+    deg_lst = []
+    informed_and_infected = []
+    informed = []
+    adhering = []
+
+    with shelve.open("experiment_data/yjmob_dynamics_shelve") as db:
+        # Iterate over the intervals you know exist
+        for interval in range(5):
+            interval_data = db.get(f"Interval {interval}")
+
+            true_dynamics.extend(interval_data["True Dynamics"])
+            deg_lst.extend(interval_data["Dynamic Degree"])
+            informed_and_infected.extend(interval_data["Informed and Infected"])
+            informed.extend(interval_data["Informed"])
+            adhering.extend(interval_data["Adhering"])
+
+    # Now, true_dynamics and deg_lst should have full 75 time steps from all YJMOB intervals
+
+    # Update dynamic_deg for consistency
+    dynamic_deg = deepcopy(deg_lst)
 
 def given_at_time(time):
     new_r_ratio = sum(1 for node in contact_graph.nodes() 
@@ -333,7 +388,7 @@ def optimize_segment(start=1, end=T, bounds = [(1, binomial_bound), (0, 1)],eps_
 
     return w1_avg, w2_avg
 
-# Split_point: None means no split, otherwise it is the time to split the optimization
+# Split_point: None means no split, otherwise it is the time at which to split the optimization
 def drive_optimizer(split_point=None):
     w1_all_runs = []
     w2_avg = []
@@ -370,7 +425,6 @@ def drive_optimizer(split_point=None):
 #           x: <x_values>\n
 #           y: <y_values>\n
 #     where x_values and y_values are comma-separated lists of values
-#         for the following data: SIR simulation, w1 true, w1 estimated, w2 true, and w2 estimated
 #
 #-------------
 

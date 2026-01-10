@@ -28,6 +28,7 @@ FIGURE_SIZE_BAR = (14, 8)
 
 n = 200
 T = 100
+NUM_SEEDS = 10
 
 beta = 0.15 # Infection rate
 gamma = 0.07 # Recovery rate
@@ -112,7 +113,7 @@ def const_quarantines(plot_data=False):
         data1 = SIR.Simulate_SIR(
             contact_network=deepcopy(contact_network),
             social_network=deepcopy(social_network),
-            T=T, 
+            T=T, seeds=NUM_SEEDS,
             beta=beta, gamma=gamma, mu=mu, init=init,
              q=quarantine_constant, adherence=adherence
         )[2]
@@ -171,7 +172,7 @@ def normal_dist_quarantines(plot_data=False):
         data1 = SIR.Simulate_SIR(
             contact_network=deepcopy(contact_network),
             social_network=deepcopy(social_network),
-            T=T, 
+            T=T, seeds=NUM_SEEDS,
             beta=beta, gamma=gamma, mu=mu, init=init,
              q=True, adherence=adherence
         )[2]
@@ -417,7 +418,7 @@ def compare_infections_adherence(adherence, plot_data=False):
         data1 = SIR.Simulate_SIR(
             contact_network=deepcopy(contact_network),
             social_network=deepcopy(social_network),
-            T=T, 
+            T=T, num_seeds=NUM_SEEDS,
             beta=beta, gamma=gamma, mu=mu, init=init, q="r"
         )[2]
         T_runs.append(data1[0])
@@ -426,7 +427,7 @@ def compare_infections_adherence(adherence, plot_data=False):
         data2 = SIR.Simulate_SIR(
             contact_network=deepcopy(contact_network),
             social_network=deepcopy(social_network),
-            T=T, 
+            T=T, num_seeds=NUM_SEEDS,
             beta=beta, gamma=gamma, mu=mu, init=init,q="r", adherence=adherence
         )[2]
         Y_runs_partial_adherence.append(data2[1])
@@ -472,7 +473,7 @@ def r_quarantine(plot_data=False):
         data1 = SIR.Simulate_SIR(
             contact_network=deepcopy(contact_network),
             social_network=deepcopy(social_network),
-            T=T, 
+            T=T, num_seeds=NUM_SEEDS,
             beta=beta, gamma=gamma, mu=mu, init=init,
              q="r", adherence=1.0
         )[2]
@@ -529,7 +530,7 @@ def permanent_quarantine(plot_data=False):
         data1 = SIR.Simulate_SIR(
             contact_network=deepcopy(contact_network),
             social_network=deepcopy(social_network),
-            T=T, 
+            T=T, num_seeds=NUM_SEEDS,
             beta=beta, gamma=gamma, mu=mu, init=init,
              q=T, adherence=1.0
         )[2]

@@ -111,10 +111,6 @@ def restore_edges(g_init, g, node, already_quarantining):
 def Simulate_SIR(contact_network,social_network,T,beta,gamma,mu,init,
                  q=False,lt_threshold=None,adherence=None,begin_q=0,seeds=None,initial_state_dict=None):
     
-    # Generate seed set if not provided
-    if seeds is None:
-        seeds = find_seeds.find_seed_set(social_graph=social_network, num_seeds=10, exponent=2)
-
     if begin_q is None:
         begin_q = 0
 
