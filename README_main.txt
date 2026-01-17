@@ -1,5 +1,7 @@
 This README covers purpose and functionality of main folder .py files.
 
+<p align="justify">
+
 correlated_graphs.py:
 Implements several methods for generating and analyzing directed graphs with various correlation and similarity structures.
 
@@ -253,3 +255,4 @@ Relabeling and Exporting Networks:
 For each interval, the contact and social networks are saved in .gml format using nx.write_gml.
 
 Cytoscape Integration: If ping_cytoscape is set to True, the social network is converted to an undirected graph and relabeled to avoid node overlaps. This union of the contact and social networks is sent to Cytoscape using py4cytoscape's create_network_from_networkx function.
+</p>
