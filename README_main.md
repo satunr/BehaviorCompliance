@@ -1,4 +1,4 @@
-# When knowledge meets infection, ties break: a multiplex approach to behavioral compliance
+## When knowledge meets infection, ties break: a multiplex approach to behavioral compliance
 
 ### correlated_graphs.py.
 <p align="justify">
