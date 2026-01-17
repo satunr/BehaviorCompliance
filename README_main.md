@@ -29,87 +29,34 @@ This code simulates and visualizes influence spread in social and contact networ
 </p>
 
 
-lt_ic_loss_function.py:
-Calculates the loss between observed and inferred quarantine data for the Independent Cascade (I.C.) and Linear Threshold (L.T.) models, and evaluates the effect of varying thresholds on the loss.
-
-It generates subgraphs from a social network using random walks and computes the loss of L.T. with respect to I.C. using the mean squared error (MSE) metric. The script includes functionalities for random node removal, edge existence probability.
-
-It also supports generating multiple networks to observe the impact on loss and visualizes the results as a 3D bar graph comparing losses across networks. Additionally, it provides the ability to plot loss comparisons with varying thresholds.
+### lt_ic_loss_function.py.
+<p align="justify">
+This code calculates the loss between observed and inferred quarantine data under the Independent Cascade (IC) and Linear Threshold (LT) diffusion models, with a particular focus on how varying threshold parameters affect model discrepancy. It generates subgraphs from an underlying social network using random walks, applies random node removal and edge existence probabilities, and computes LT loss relative to IC using mean squared error (MSE) as the evaluation metric. The implementation supports generating multiple network realizations to assess variability in loss behavior across different graph instances. Results are visualized through a 3D bar plot that compares losses across networks, along with additional plots that illustrate how loss changes as a function of the LT threshold, enabling systematic sensitivity analysis.
+</p>
 
 
-
-
-
-mean_field_approx.py:
-Simulates an SIR model on a contact network, optimizing the parameters (mean node degree and recovered fraction) using mean-field approximation.
-
-It supports multiple modes (standard, adherence, YJMOB, sensitivity analysis) and saves simulation results, including newly infected and recovered counts, to a file.
-
-The optimization uses L-BFGS-B to minimize error between predicted and true dynamics.
+### mean_field_approx.py.
+<p align="justify">
+This code simulates a Susceptible–Infected–Recovered (SIR) model on a contact network and optimizes key epidemiological parameters, including the mean node degree and recovered fraction, using a mean-field approximation. It supports multiple execution modes—such as standard simulation, adherence-based dynamics, YJMOB scenarios, and sensitivity analysis—allowing flexible exploration of intervention and behavioral effects. Model parameters are estimated via L-BFGS-B optimization by minimizing the error between predicted and observed infection and recovery trajectories. The simulation tracks newly infected and recovered populations over time and saves these results to disk for downstream analysis, validation, and comparison across scenarios.
+</p>
 
 
 
+### mfa_drive_compute.py.
+<p align="justify">
+This code repeatedly runs a Mean Field Approximation (MFA) model under varying parameter settings to explore a range of epidemic and behavioral scenarios. It includes an adherence mode that evaluates system dynamics across multiple adherence levels, saving results for comparative analysis. The simple repeat mode executes the MFA multiple times with identical configurations to assess stability and variability. The YJMob mode applies MFA to the YJMob dataset across different time intervals, enabling temporal sensitivity studies. Additionally, a sensitivity analysis mode systematically varies key parameters such as the number of seed nodes, the initial infected proportion, and network density, iterating multiple times to generate sufficient data for robust evaluation.
+</p>
 
 
-mfa_drive_compute.py:
-Runs the Mean Field Approximation (MFA) multiple times with varying parameters to explore different scenarios.
+### parse.py.
+<p align="justify">
+This code defines a utility function that parses an edge list from a text file and constructs a corresponding NetworkX graph. The parse function reads each line of the input file as a pair of node indices, adds an edge between the nodes using G.add_edge(i, j), and tracks the minimum node index encountered to ensure consistent labeling if needed. It returns the fully constructed graph object. An optional parse_example flag allows the function to be tested directly by supplying a file containing edge data, providing a simple way to validate the parsing and graph construction logic.
+</p>
 
-adherence_mode: Runs MFA for different adherence levels (0.2, 0.4, 0.6, 0.8, 0.9, 1.0) and saves results.
-
-simple_repeat: Runs MFA several times with the same configuration.
-
-yjmob_mode: Runs MFA on the YJMob dataset for different time intervals.
-
-sensitivity_analysis: Runs MFA while varying the number of seeds, initial infected proportion, and network density.
-
-Iterates multiple times to gather sufficient data.
-
-
-
-
-
-parse.py:
-Defines a function to parse an edge list from a text file and create a NetworkX graph.
-
-parse: Reads a file with edge pairs, adds edges to a graph, and determines the minimum node index.
-
-G.add_edge(i, j): Adds an edge between nodes i and j for each line in the file.
-
-It returns the constructed graph. If parse_example is set to True, you can test the function by passing a file containing edge data.
-
-
-
-
-
-SIR_examples.py:
-Simulates and visualizes various SIR (Susceptible-Infected-Recovered) models with different quarantine strategies and conditions.
-
-informed_vs_noninformed: Compares infection rates with and without quarantine.
-
-const_quarantines: Simulates infection spread with a constant quarantine duration and compares with no quarantine.
-
-normal_dist_quarantines: Tests the effect of Gaussian quarantine on infection spread.
-
-jaccard_similarity: Calculates and visualizes the Jaccard similarity between social and contact networks.
-
-random_vs_nonrandom_seeds: Compares infection rates using random vs. degree-based non-random seed selection.
-
-compare_infections_adherence: Compares the effect of full vs. partial adherence on infection rates.
-
-r_quarantine: Simulates quarantine measures that last until recovery.
-
-permanent_quarantine: Tests permanent quarantine strategies on infection dynamics.
-
-plot_all_quarantine: Plots results for all quarantine strategies to compare their effects.
-
-run_simulations: Runs all the above simulations.
-
-SIR_pickle_dump: Saves the simulation results and model parameters into a pickle file.
-
-pickle_load: Loads and prints the saved simulation data.
-
-The main function executes the simulations and saves results for further analysis. The visualizations include infection curves for different strategies, all saved as PDF figures for publication.
-
+### SIR_examples.py
+<p align="justify">
+This code simulates and visualizes a suite of Susceptible–Infected–Recovered (SIR) epidemic models under diverse quarantine strategies and behavioral conditions to study their impact on infection dynamics. It compares infection trajectories with and without quarantine, evaluates constant-duration, Gaussian-distributed, recovery-based, and permanent quarantine policies, and analyzes the effects of full versus partial adherence. The implementation also contrasts random versus degree-based seed selection, computes and visualizes Jaccard similarity between social and contact networks, and examines how information awareness influences spread. All strategies are executed through a unified simulation pipeline, with results plotted as infection curves and saved as publication-ready PDF figures. Simulation outputs and parameters are serialized via pickle for reproducibility and later analysis, and can be reloaded to inspect or extend prior results.
+</p>
 
 
 
