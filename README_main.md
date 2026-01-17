@@ -1,17 +1,9 @@
 This README covers purpose and functionality of main folder .py files.
 
 <p align="justify">
-correlated_graphs.py:
-Implements several methods for generating and analyzing directed graphs with various correlation and similarity structures.
-
-The core function, `create_correlated_digraph`, constructs a directed graph where edge existence correlates with an undirected base graph, allowing for controlled sparsity through a correlation factor.
-
-Additionally, `create_w_k_hop_correlation` builds a graph based on Jaccard similarity between k-hop neighborhoods, providing insights into graph proximity and connectivity.
-
-The `create_social_graph` function models a social network by utilizing Jaccard similarity and edge sampling based on ranked similarity, enabling the creation of directed social graphs with variable edge densities.
+# correlated_graphs.py:
+This code implements several methods for generating and analyzing directed graphs with structured correlation and similarity properties. It includes a core routine, create_correlated_digraph, which constructs a directed graph whose edge existence is correlated with an underlying undirected base graph, enabling controlled sparsity through a tunable correlation factor. In addition, the code provides create_w_k_hop_correlation, which generates directed edges based on Jaccard similarity between k-hop neighborhoods, offering a mechanism to capture proximity and local connectivity patterns in graphs. Finally, the create_social_graph function models social network structure by ranking node pairs using Jaccard similarity and sampling directed edges accordingly, allowing the creation of directed social graphs with flexible and interpretable edge density profiles.
 </p>
-
-
 
 
 extract_loss_calc.py:
