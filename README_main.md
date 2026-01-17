@@ -9,7 +9,7 @@ The core function, `create_correlated_digraph`, constructs a directed graph wher
 Additionally, `create_w_k_hop_correlation` builds a graph based on Jaccard similarity between k-hop neighborhoods, providing insights into graph proximity and connectivity.
 
 The `create_social_graph` function models a social network by utilizing Jaccard similarity and edge sampling based on ranked similarity, enabling the creation of directed social graphs with variable edge densities.
-
+</p>
 
 
 
@@ -254,4 +254,3 @@ Relabeling and Exporting Networks:
 For each interval, the contact and social networks are saved in .gml format using nx.write_gml.
 
 Cytoscape Integration: If ping_cytoscape is set to True, the social network is converted to an undirected graph and relabeled to avoid node overlaps. This union of the contact and social networks is sent to Cytoscape using py4cytoscape's create_network_from_networkx function.
-</p>
