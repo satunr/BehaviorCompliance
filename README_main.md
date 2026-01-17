@@ -3,18 +3,12 @@ This README covers purpose and functionality of main folder .py files.
 ### correlated_graphs.py.
 <p align="justify">
 This code implements several methods for generating and analyzing directed graphs with structured correlation and similarity properties. It includes a core routine, create_correlated_digraph, which constructs a directed graph whose edge existence is correlated with an underlying undirected base graph, enabling controlled sparsity through a tunable correlation factor. In addition, the code provides create_w_k_hop_correlation, which generates directed edges based on Jaccard similarity between k-hop neighborhoods, offering a mechanism to capture proximity and local connectivity patterns in graphs. Finally, the create_social_graph function models social network structure by ranking node pairs using Jaccard similarity and sampling directed edges accordingly, allowing the creation of directed social graphs with flexible and interpretable edge density profiles.
+
+
+### extract_loss_calc.py.
+<p align="justify">
+This code loads a real-world social network, computes loss matrices for Independent Cascade (IC) and Linear Threshold (LT) diffusion models, and manages their structured storage and retrieval. It parses a Facebook network dataset, relabels nodes to ensure consistent indexing, and generates multiple correlated network instances to support robust loss evaluation. The resulting IC and LT loss matrices are written to a well-defined text format with validation checks that ensure safe and reliable re-parsing. For downstream analysis and comparison, the parsed matrices are further simplified by retaining only their final rows, enabling efficient inspection and reuse without recomputing the full diffusion processes.
 </p>
-
-
-extract_loss_calc.py:
-Loads a real-world social network, computes loss matrices for Independent Cascade (I.C.) and Linear Threshold (L.T.) diffusion models, and manages their storage and retrieval.
-
-It parses a Facebook network dataset, relabels nodes for consistency, and generates multiple correlated networks for loss evaluation.
-
-The resulting I.C. and L.T. loss matrices are written to a structured text file and can be safely re-parsed with validation checks.
-
-For convenience, parsed matrices are simplified by retaining only their final rows, enabling easy comparison and downstream analysis.
-
 
 
 
