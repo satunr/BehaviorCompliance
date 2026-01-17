@@ -11,35 +11,22 @@ This code loads a real-world social network, computes loss matrices for Independ
 </p>
 
 
-### find_seeds.py:
+### find_seeds.py.
 <p align="justify">
 This code provides a probabilistic framework for selecting seed nodes in a social network based on node degrees and a configurable exponent that controls selection bias. The find_seed_set function computes selection probabilities for each node, enabling the construction of a diverse yet influential seed set rather than relying on purely deterministic choices. The initialize_social_IM function then initializes a social influence model—either Independent Cascade or Linear Threshold—using the selected seeds and specified influence parameters, and runs simulations to estimate the resulting influence spread. Together, these components support flexible seed selection and influence maximization experiments across different network structures and diffusion dynamics.
 </p>
 
-IM.py:
-Models influence spread in social networks using the Independent Cascade (IC) and Linear Threshold (LT) diffusion models.
 
-The IC_prob_matrix function simulates the probability of each node becoming informed based on multiple Monte Carlo simulations, while IC tracks the actual spread of influence.
-
-The greedy function selects an optimal set of seed nodes to maximize influence spread using the IC model, while greedy_for_lt performs a similar task for the LT model by considering influence thresholds.
-
-Both models allow for quarantine handling, ensuring nodes in quarantine are not activated, and the influence of a node is based on its neighbors' status.
+### IM.py.
+<p align="justify">
+This code models influence spread in social networks using the Independent Cascade (IC) and Linear Threshold (LT) diffusion frameworks. The IC_prob_matrix function estimates the probability of each node becoming informed through repeated Monte Carlo simulations, while the IC routine simulates realized influence propagation paths. A greedy selection strategy is implemented to identify seed nodes that maximize expected influence under the IC model, and a corresponding greedy_for_lt function extends this approach to the LT model by explicitly accounting for node-specific activation thresholds. Both diffusion models incorporate quarantine constraints, ensuring that quarantined nodes are not activated during simulations, and define influence in terms of the activation states of neighboring nodes, enabling realistic modeling of constrained information or disease spread.
+</p>
 
 
-
-
-
-informingcontact.py:
-Simulates and visualizes the spread of influence in social and contact networks, using both the Independent Cascade (IC) and Linear Threshold (LT) models.
-
-It generates a contact network from a file, correlates it with a social network, and simulates the SIR epidemic model on the social graph. The resulting social network is used for Influence Maximization (IM) to identify seed nodes, with the goal of reducing the spread of infection by removing edges from the contact network.
-
-Supports integration with Cytoscape via py4cytoscape for visualization and can save networks to GML files or display them inline using matplotlib.
-
-It also compares the influence spread of the greedy IM algorithm with a random seed selection approach, plotting edge removal efficiency as a function of k, the number of seed nodes chosen.
-
-
-
+### informingcontact.py.
+<p align="justify">
+This code simulates and visualizes influence spread in social and contact networks using the Independent Cascade (IC) and Linear Threshold (LT) diffusion models. It constructs a contact network from input files, correlates it with an underlying social network, and runs an SIR epidemic simulation on the social graph to capture disease dynamics. The resulting social structure is then used for Influence Maximization (IM) to identify key seed nodes whose selection aims to mitigate infection spread by strategically removing edges from the contact network. The implementation supports rich visualization workflows, including integration with Cytoscape via py4cytoscape, exporting networks to GML, and inline plotting with matplotlib. Finally, it evaluates the effectiveness of the greedy IM strategy against random seed selection by comparing influence spread and plotting edge-removal efficiency as a function of k, the number of selected seed nodes.
+</p>
 
 
 lt_ic_loss_function.py:
