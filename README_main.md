@@ -1,4 +1,4 @@
-This README covers purpose and functionality of main folder .py files.
+# When knowledge meets infection, ties break: a multiplex approach to behavioral compliance
 
 ### correlated_graphs.py.
 <p align="justify">
