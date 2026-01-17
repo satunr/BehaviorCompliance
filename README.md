@@ -1,4 +1,4 @@
-This project provides a suite of Python scripts for analyzing and visualizing network-based quarantine simulations. The core functionality revolves around parsing outputs from Mean-Field Approximation (MFA) simulations, estimating quarantine adherence, and generating publication-quality figures for both infection and information spread dynamics. The scripts support post-quarantine analysis, cumulative adherence estimation, and optimizer-based evaluation of network metrics such as mean node degree. Key workflows include loading simulation data, computing summary statistics, fitting model parameters, and producing visualizations with mean and variability bands. Results are stored in pickle files for reproducibility and downstream analysis. The project is designed to facilitate quantitative evaluation of quarantine effects and network adherence dynamics in computational epidemiology studies.
+<p align="justify">This project provides a suite of Python scripts for analyzing and visualizing network-based quarantine simulations. The core functionality revolves around parsing outputs from Mean-Field Approximation (MFA) simulations, estimating quarantine adherence, and generating publication-quality figures for both infection and information spread dynamics. The scripts support post-quarantine analysis, cumulative adherence estimation, and optimizer-based evaluation of network metrics such as mean node degree. Key workflows include loading simulation data, computing summary statistics, fitting model parameters, and producing visualizations with mean and variability bands. Results are stored in pickle files for reproducibility and downstream analysis. The project is designed to facilitate quantitative evaluation of quarantine effects and network adherence dynamics in computational epidemiology studies.
 
 analyze_quarantine_dynamics.py — Analyzes post-quarantine MFA simulation data to estimate adherence, optimize parameters, track dynamic adherence over time, and generate comparison plots. Outputs include PDF figures and processed data in pickle files.
 
@@ -21,7 +21,9 @@ mfa_degree_estimates.pdf / .pkl — Figures and data comparing optimizer-estimat
 cumulative_adherence_results.pkl — Pickled results containing cumulative adherence estimates, true and estimated mean node degrees, and related metrics from MFA simulations.
 
 Grouped adherence figure PDFs — Compare infection/information dynamics across multiple adherence levels.
+</p>
 
 Single adherence PDFs — Show mean dynamics and variability for a specific adherence scenario.
 
 Sensitivity analysis PDFs — Visualize how estimates of initial mean node degree respond to changes in simulation parameters (e.g., number of seeds, initial infection proportion, network density).
+}
