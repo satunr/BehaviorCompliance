@@ -11,20 +11,10 @@ This code loads a real-world social network, computes loss matrices for Independ
 </p>
 
 
-
-
-find_seeds.py:
-Provides a probabilistic method for selecting seed nodes in a social network, based on node degrees and a configurable exponent.
-
-The function find_seed_set calculates the probability of each node being selected as a seed, ensuring a diverse and influential set of starting nodes.
-
-The initialize_social_IM function initializes a social influence model (Independent Cascade or Linear Threshold) with a specified number of seeds and influence parameters, running simulations to determine the maximum influence spread.
-
-This approach allows for flexible seed selection and influence maximization in social network models.
-
-
-
-
+### find_seeds.py:
+<p align="justify">
+This code provides a probabilistic framework for selecting seed nodes in a social network based on node degrees and a configurable exponent that controls selection bias. The find_seed_set function computes selection probabilities for each node, enabling the construction of a diverse yet influential seed set rather than relying on purely deterministic choices. The initialize_social_IM function then initializes a social influence model—either Independent Cascade or Linear Threshold—using the selected seeds and specified influence parameters, and runs simulations to estimate the resulting influence spread. Together, these components support flexible seed selection and influence maximization experiments across different network structures and diffusion dynamics.
+</p>
 
 IM.py:
 Models influence spread in social networks using the Independent Cascade (IC) and Linear Threshold (LT) diffusion models.
